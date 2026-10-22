@@ -5,7 +5,8 @@
 //   recuperando a senha     → só a tela de senha nova
 //   sessão sem onboarding   → onboarding (e a criação do primeiro tema)
 //   sessão com onboarding   → o app (Hoje)
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { View } from 'react-native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -13,25 +14,27 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { IconContext } from 'phosphor-react-native'
+import { ICON_WEIGHT } from '@/lib/constants'
 import {
   useFonts,
-  HostGrotesk_400Regular,
-  HostGrotesk_500Medium,
-  HostGrotesk_600SemiBold,
-  HostGrotesk_700Bold,
-  HostGrotesk_800ExtraBold,
-} from '@expo-google-fonts/host-grotesk'
-import { AnimatedSplash } from '@/components/AnimatedSplash'
-import { OfflineBanner } from '@/components/OfflineBanner'
-import { ToastHost } from '@/components/ToastHost'
-import { ErrorView } from '@/components/StateView'
+  Newsreader_400Regular,
+  Newsreader_500Medium,
+  Newsreader_600SemiBold,
+  Newsreader_400Regular_Italic,
+  Newsreader_500Medium_Italic,
+} from '@expo-google-fonts/newsreader'
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter'
+import { Splash } from '@/components/ui/Splash'
+import { OfflineBanner } from '@/components/ui/OfflineBanner'
+import { ToastHost } from '@/components/ui/Toast'
+import { ErrorView } from '@/components/ui/StateView'
 import { ThemeProvider, useColors, useTheme } from '@/lib/theme'
 import { queryClient } from '@/lib/query'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { configureGoogleSignin } from '@/lib/google-auth'
 import { initAnalytics } from '@/lib/analytics'
 import { addNotificationTapListener } from '@/lib/push'
-import { View } from 'react-native'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -52,6 +55,8 @@ function RootNavigator() {
 
   useEffect(() => {
     if (!resolved) return
+    // Galeria de componentes (app/dev): aberta em desenvolvimento, com ou sem sessão.
+    if (__DEV__ && first === 'dev') return
     if (!session) {
       if (!AUTH_ROUTES.has(first)) router.replace('/welcome')
       return
@@ -94,22 +99,26 @@ function RootNavigator() {
 function SplashGate({ resolved }: { resolved: boolean }) {
   const [gone, setGone] = useState(false)
   if (gone) return null
-  return (
-    <AnimatedSplash
-      hide={resolved}
-      onReady={() => SplashScreen.hideAsync().catch(() => {})}
-      onHidden={() => setGone(true)}
-    />
-  )
+  return <Splash hide={resolved} onReady={() => SplashScreen.hideAsync().catch(() => {})} onHidden={() => setGone(true)} />
+}
+
+/** Ícones do app inteiro: traço regular, cor do texto. Componentes que precisam de outro ajustam localmente. */
+function Icons({ children }: { children: ReactNode }) {
+  const c = useColors()
+  return <IconContext.Provider value={{ color: c.text, size: 22, weight: ICON_WEIGHT }}>{children}</IconContext.Provider>
 }
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    HostGrotesk_400Regular,
-    HostGrotesk_500Medium,
-    HostGrotesk_600SemiBold,
-    HostGrotesk_700Bold,
-    HostGrotesk_800ExtraBold,
+    Newsreader_400Regular,
+    Newsreader_500Medium,
+    Newsreader_600SemiBold,
+    Newsreader_400Regular_Italic,
+    Newsreader_500Medium_Italic,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   })
 
   useEffect(() => {
@@ -124,13 +133,15 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <KeyboardProvider>
           <ThemeProvider>
-            <QueryClientProvider client={queryClient}>
-              <AuthProvider>
-                <RootNavigator />
-                <ToastHost />
-                <OfflineBanner />
-              </AuthProvider>
-            </QueryClientProvider>
+            <Icons>
+              <QueryClientProvider client={queryClient}>
+                <AuthProvider>
+                  <RootNavigator />
+                  <ToastHost />
+                  <OfflineBanner />
+                </AuthProvider>
+              </QueryClientProvider>
+            </Icons>
           </ThemeProvider>
         </KeyboardProvider>
       </SafeAreaProvider>

@@ -1,11 +1,11 @@
-// components/Confetti.tsx — chuva de confete em Animated puro (sem dependência).
+// components/ui/Confetti.tsx — chuva de confete em Animated puro (sem dependência).
 // Usado no fim de uma sessão. Dispara uma vez ao montar.
 import { useEffect, useRef } from 'react'
 import { Animated, Dimensions, Easing, StyleSheet, View } from 'react-native'
 const { width: W, height: H } = Dimensions.get('window')
 const PIECES = 42
-// Cores de MARCA (fixas nos dois temas — confete é acento decorativo).
-const PALETTE = ['#0F766E', '#2DD4BF', '#F59E0B', '#FDE68A', '#3B82F6', '#EC4899']
+// Fixas nos dois temas: preto, argila, areia, ocre, azul e pedra.
+const PALETTE = ['#1A1917', '#C4633F', '#D8D3C8', '#D9A441', '#38597F', '#9A968D']
 
 type Piece = {
   left: number; size: number; color: string

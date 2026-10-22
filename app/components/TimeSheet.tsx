@@ -1,12 +1,11 @@
 // components/TimeSheet.tsx — escolher um horário ('HH:MM') em duas rodas.
 import { useEffect, useState } from 'react'
 import { View } from 'react-native'
-import { Text } from '@/components/Text'
-import { Button } from '@/components/Button'
-import { BottomSheet } from '@/components/BottomSheet'
-import { WheelPicker } from '@/components/WheelPicker'
-import { FONTS, GUTTER } from '@/lib/constants'
-import { makeThemedStyles } from '@/lib/theme'
+import { Text } from '@/components/ui/Text'
+import { Button } from '@/components/ui/Button'
+import { Sheet } from '@/components/ui/Sheet'
+import { WheelPicker } from '@/components/ui/WheelPicker'
+import { GUTTER, SPACE } from '@/lib/constants'
 
 const HOURS = Array.from({ length: 24 }, (_, h) => ({ label: String(h).padStart(2, '0'), value: h }))
 // De 15 em 15: o lembrete sai pelo cron do backend, que roda a cada 15 min.
@@ -18,37 +17,30 @@ export function TimeSheet({ visible, value, onConfirm, onClose }: {
   onConfirm: (time: string) => void
   onClose: () => void
 }) {
-  const s = useStyles()
-  const [hour, setHour] = useState(8)
+  const [hour, setHour] = useState(19)
   const [minute, setMinute] = useState(0)
 
   useEffect(() => {
     if (!visible) return
     const [h, m] = value.split(':').map(Number)
-    setHour(Number.isFinite(h) ? h : 8)
+    setHour(Number.isFinite(h) ? h : 19)
     setMinute(MINUTES.some((x) => x.value === m) ? m : 0)
   }, [visible, value])
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Horário do lembrete">
-      <View style={s.body}>
-        <View style={s.wheels}>
+    <Sheet visible={visible} onClose={onClose} title="Horário do lembrete">
+      <View style={{ paddingHorizontal: GUTTER }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.sm }}>
           <View style={{ flex: 1 }}><WheelPicker items={HOURS} value={hour} onChange={setHour} /></View>
-          <Text style={s.colon}>:</Text>
+          <Text variant="heading">:</Text>
           <View style={{ flex: 1 }}><WheelPicker items={MINUTES} value={minute} onChange={setMinute} /></View>
         </View>
         <Button
           label="Confirmar"
           onPress={() => onConfirm(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)}
-          style={{ marginTop: 16 }}
+          style={{ marginTop: SPACE.lg }}
         />
       </View>
-    </BottomSheet>
+    </Sheet>
   )
 }
-
-const useStyles = makeThemedStyles((c) => ({
-  body: { paddingHorizontal: GUTTER, paddingBottom: 8 },
-  wheels: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  colon: { fontFamily: FONTS.bold, fontSize: 24, color: c.gray900 },
-}))

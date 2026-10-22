@@ -1,95 +1,67 @@
-// app/welcome.tsx — primeira tela de quem não entrou: três telas de
-// apresentação e as formas de entrar.
-import { useRef, useState } from 'react'
-import { NativeScrollEvent, NativeSyntheticEvent, ScrollView, View, useWindowDimensions } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+// app/welcome.tsx — primeira tela de quem não entrou. Mostra o produto em vez
+// de explicá-lo: o nome, a promessa, um pedido de exemplo como ele é feito no
+// app e temas que dá para estudar. Tocar em qualquer um leva ao cadastro.
+import { View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { BookOpenText, CalendarCheck, PathIcon as Path } from 'phosphor-react-native'
-import { Text } from '@/components/Text'
-import { Button } from '@/components/Button'
+import { ArrowUpIcon } from 'phosphor-react-native'
+import { Text } from '@/components/ui/Text'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { IconButton } from '@/components/ui/IconButton'
+import { ListRow } from '@/components/ui/ListRow'
+import { Screen } from '@/components/ui/Screen'
 import { GoogleButton } from '@/components/GoogleButton'
 import { AppleButton } from '@/components/AppleButton'
-import { APP_NAME, FONTS, GUTTER } from '@/lib/constants'
-import { makeThemedStyles, useColors } from '@/lib/theme'
+import { APP_NAME, SPACE } from '@/lib/constants'
+import { makeThemedStyles } from '@/lib/theme'
 
-const SLIDES = [
-  {
-    Icon: BookOpenText,
-    title: 'Aprenda o que quiser, por conta própria',
-    body: 'História do Brasil, Python, finanças pessoais. Você diz o tema e o seu objetivo.',
-  },
-  {
-    Icon: Path,
-    title: 'Do zero ao avançado, na ordem certa',
-    body: 'A IA monta a trilha em módulos, cada um apoiado no anterior, com aulas curtas e exercícios.',
-  },
-  {
-    Icon: CalendarCheck,
-    title: 'No seu tempo, todos os dias',
-    body: 'Diga quanto tempo tem. O cronograma nunca passa disso, e se você faltar um dia, ele se ajusta sozinho.',
-  },
+const EXAMPLES = [
+  'Finanças pessoais, do zero ao investimento',
+  'Python para automatizar planilhas',
+  'Filosofia antiga, de Sócrates a Epicuro',
+  'Fotografia com o celular',
 ]
 
 export default function Welcome() {
   const s = useStyles()
-  const c = useColors()
   const router = useRouter()
-  const { width } = useWindowDimensions()
-  const [page, setPage] = useState(0)
-  const scroller = useRef<ScrollView>(null)
-
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const p = Math.round(e.nativeEvent.contentOffset.x / width)
-    if (p !== page) setPage(p)
-  }
+  const start = () => router.push('/signup')
 
   return (
-    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      <Text style={s.brand}>{APP_NAME}</Text>
-      <ScrollView
-        ref={scroller}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        style={{ flex: 1 }}
-      >
-        {SLIDES.map(({ Icon, title, body }) => (
-          <View key={title} style={[s.slide, { width }]}>
-            <View style={s.iconWrap}>
-              <Icon size={64} color={c.primary} weight="duotone" />
-            </View>
-            <Text style={s.title}>{title}</Text>
-            <Text style={s.body}>{body}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      <View style={s.dots}>
-        {SLIDES.map((_, i) => <View key={i} style={[s.dot, i === page && s.dotOn]} />)}
+    <Screen
+      footer={
+        <>
+          <Button label="Criar conta" onPress={start} />
+          <GoogleButton />
+          <AppleButton />
+          <Button label="Já tenho conta" variant="ghost" onPress={() => router.push('/signin')} />
+        </>
+      }
+    >
+      <View style={s.hero}>
+        <Text variant="wordmark" align="center">{APP_NAME}</Text>
+        <Text variant="reading" tone="secondary" align="center">
+          Diga o que quer aprender e quanto tempo tem.{'\n'}A gente monta o caminho e te diz o que estudar hoje.
+        </Text>
       </View>
-      <View style={s.actions}>
-        <Button label="Criar conta" onPress={() => router.push('/signup')} />
-        <GoogleButton />
-        <AppleButton />
-        <Button label="Já tenho conta" variant="ghost" onPress={() => router.push('/signin')} />
+
+      {/* O card não é tocável: o botão redondo é o alvo (botão dentro de botão
+          confunde leitor de tela e quebra no web). */}
+      <Card variant="elevated" style={s.prompt}>
+        <Text variant="heading">Quero entender a história do Brasil para o ENEM</Text>
+        <IconButton variant="solid" size="md" onPress={start} accessibilityLabel="Começar" style={{ alignSelf: 'flex-end' }}>
+          <ArrowUpIcon />
+        </IconButton>
+      </Card>
+
+      <View style={{ marginTop: SPACE.lg }}>
+        {EXAMPLES.map((e) => <ListRow key={e} variant="divided" title={e} onPress={start} numberOfLines={1} />)}
       </View>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const useStyles = makeThemedStyles((c) => ({
-  safe: { flex: 1, backgroundColor: c.bg },
-  brand: { fontFamily: FONTS.extraBold, fontSize: 20, color: c.primary, textAlign: 'center', marginTop: 12 },
-  slide: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: GUTTER * 2 },
-  iconWrap: {
-    width: 128, height: 128, borderRadius: 64, backgroundColor: c.primarySoft,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 32,
-  },
-  title: { fontFamily: FONTS.extraBold, fontSize: 28, lineHeight: 34, color: c.gray900, textAlign: 'center' },
-  body: { fontFamily: FONTS.regular, fontSize: 17, lineHeight: 25, color: c.gray600, textAlign: 'center', marginTop: 12 },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 20 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.gray300 },
-  dotOn: { width: 24, backgroundColor: c.primary },
-  actions: { paddingHorizontal: GUTTER, gap: 10, paddingBottom: 8 },
+const useStyles = makeThemedStyles(() => ({
+  hero: { alignItems: 'center', gap: SPACE.md, paddingTop: SPACE.xxxl, paddingBottom: SPACE.xxl },
+  prompt: { minHeight: 136, justifyContent: 'space-between', gap: SPACE.md },
 }))

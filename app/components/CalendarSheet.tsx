@@ -1,13 +1,14 @@
-// components/CalendarSheet.tsx — escolher uma data num calendário, em bottom sheet.
+// components/CalendarSheet.tsx — escolher uma data num calendário, em sheet.
 import { useEffect, useState } from 'react'
-import { TouchableOpacity, View } from 'react-native'
-import { CaretLeft, CaretRight } from 'phosphor-react-native'
-import { Text } from '@/components/Text'
-import { Button } from '@/components/Button'
-import { BottomSheet } from '@/components/BottomSheet'
-import { FONTS, GUTTER } from '@/lib/constants'
+import { Pressable, View } from 'react-native'
+import { CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
+import { Text } from '@/components/ui/Text'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
+import { Sheet } from '@/components/ui/Sheet'
+import { GUTTER, HAIRLINE, SPACE } from '@/lib/constants'
 import { toISODate } from '@/lib/format'
-import { makeThemedStyles, useColors } from '@/lib/theme'
+import { makeThemedStyles } from '@/lib/theme'
 
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const WEEK = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
@@ -22,7 +23,6 @@ export function CalendarSheet({ visible, title, value, minDate, onConfirm, onClo
   onClose: () => void
 }) {
   const s = useStyles()
-  const c = useColors()
   const [year, setYear] = useState(0)
   const [month, setMonth] = useState(0)
   const [selected, setSelected] = useState(value)
@@ -38,10 +38,9 @@ export function CalendarSheet({ visible, title, value, minDate, onConfirm, onClo
   const today = toISODate(new Date())
   const firstWeekday = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells: (number | null)[] = []
-  for (let i = 0; i < firstWeekday; i++) cells.push(null)
+  const cells: (number | null)[] = Array.from({ length: firstWeekday }, () => null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-  while (cells.length < 42) cells.push(null)
+  while (cells.length % 7) cells.push(null)
   const rows: (number | null)[][] = []
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7))
   const toStr = (day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -53,15 +52,15 @@ export function CalendarSheet({ visible, title, value, minDate, onConfirm, onClo
   }
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={title}>
-      <View style={s.body}>
+    <Sheet visible={visible} onClose={onClose} title={title}>
+      <View style={{ paddingHorizontal: GUTTER }}>
         <View style={s.nav}>
-          <TouchableOpacity onPress={() => shift(-1)} hitSlop={12}><CaretLeft size={22} color={c.gray900} weight="bold" /></TouchableOpacity>
-          <Text style={s.month}>{MONTHS[month]} de {year}</Text>
-          <TouchableOpacity onPress={() => shift(1)} hitSlop={12}><CaretRight size={22} color={c.gray900} weight="bold" /></TouchableOpacity>
+          <IconButton onPress={() => shift(-1)} accessibilityLabel="Mês anterior"><CaretLeftIcon /></IconButton>
+          <Text variant="subheading">{MONTHS[month]} {year}</Text>
+          <IconButton onPress={() => shift(1)} accessibilityLabel="Próximo mês"><CaretRightIcon /></IconButton>
         </View>
         <View style={s.row}>
-          {WEEK.map((d, i) => <Text key={i} style={s.weekDay}>{d}</Text>)}
+          {WEEK.map((d, i) => <Text key={i} variant="micro" tone="tertiary" align="center" style={s.weekDay}>{d}</Text>)}
         </View>
         {rows.map((row, ri) => (
           <View key={ri} style={s.row}>
@@ -71,33 +70,40 @@ export function CalendarSheet({ visible, title, value, minDate, onConfirm, onClo
               const off = !!minDate && str < minDate
               const sel = selected === str && !off
               return (
-                <TouchableOpacity key={di} style={[s.cell, sel && s.cellSel]} onPress={() => setSelected(str)} disabled={off} activeOpacity={0.7}>
-                  <Text style={[s.day, str === today && !sel && s.dayToday, sel && s.daySel, off && s.dayOff]}>{day}</Text>
-                </TouchableOpacity>
+                <Pressable
+                  key={di}
+                  style={s.cell}
+                  onPress={() => setSelected(str)}
+                  disabled={off}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sel, disabled: off }}
+                  accessibilityLabel={`${day} de ${MONTHS[month]}`}
+                >
+                  <View style={[s.day, sel && s.daySel, str === today && !sel && s.dayToday]}>
+                    <Text variant="label" tone={sel ? 'onPrimary' : off ? 'tertiary' : 'primary'}>{day}</Text>
+                  </View>
+                </Pressable>
               )
             })}
           </View>
         ))}
-        <View style={s.actions}>
-          <Button label="Cancelar" variant="secondary" onPress={onClose} style={{ flex: 1 }} />
-          <Button label="Confirmar" onPress={() => onConfirm(selected)} disabled={!!minDate && selected < minDate} style={{ flex: 1 }} />
-        </View>
+        <Button
+          label="Confirmar"
+          onPress={() => onConfirm(selected)}
+          disabled={!!minDate && selected < minDate}
+          style={{ marginTop: SPACE.lg }}
+        />
       </View>
-    </BottomSheet>
+    </Sheet>
   )
 }
 
 const useStyles = makeThemedStyles((c) => ({
-  body: { paddingHorizontal: GUTTER },
-  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingHorizontal: 4 },
-  month: { fontFamily: FONTS.semiBold, fontSize: 16, color: c.gray900 },
-  row: { flexDirection: 'row', marginBottom: 2 },
-  weekDay: { flex: 1, textAlign: 'center', fontFamily: FONTS.semiBold, fontSize: 12, color: c.gray500, paddingVertical: 6 },
-  cell: { flex: 1, height: 42, justifyContent: 'center', alignItems: 'center', borderRadius: 21 },
-  cellSel: { backgroundColor: c.primary },
-  day: { fontFamily: FONTS.regular, fontSize: 16, color: c.gray900 },
-  dayToday: { fontFamily: FONTS.bold, color: c.primary },
-  daySel: { fontFamily: FONTS.bold, color: c.onPrimary },
-  dayOff: { color: c.gray300 },
-  actions: { flexDirection: 'row', gap: 12, paddingTop: 16, marginTop: 8 },
+  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.md },
+  row: { flexDirection: 'row' },
+  weekDay: { flex: 1, paddingVertical: SPACE.sm },
+  cell: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
+  day: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  daySel: { backgroundColor: c.primary },
+  dayToday: { borderWidth: HAIRLINE, borderColor: c.borderStrong },
 }))

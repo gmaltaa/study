@@ -1,24 +1,38 @@
-// app/tema/novo.tsx — criar um tema em três passos: o que aprender, quanto
-// tempo tem e como quer estudar. No fim, o backend recusa na hora um tema que
-// não pode ser ensinado, ou começa a montar a trilha e a tela vai para ela.
+// app/tema/novo.tsx — criar um tema em quatro passos:
+//   1. o que aprender (o campo grande, como um pedido)
+//   2. o objetivo e o quanto já sabe
+//   3. quanto tempo tem
+//   4. até onde ir e como estudar
+// No fim, o backend recusa na hora um tema que não pode ser ensinado, ou começa
+// a montar a trilha e a tela vai para ela.
 import { useState } from 'react'
 import { Alert, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Text } from '@/components/Text'
-import { Screen } from '@/components/Screen'
-import { TextField } from '@/components/Field'
-import { Button } from '@/components/Button'
-import { Chip, ChipGroup, OptionCard } from '@/components/Chip'
-import { StepDots } from '@/components/StepDots'
+import { Screen } from '@/components/ui/Screen'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { Composer } from '@/components/ui/Composer'
+import { TextField } from '@/components/ui/TextField'
+import { Button } from '@/components/ui/Button'
+import { ListRow } from '@/components/ui/ListRow'
+import { ChipGroup, RadioCard } from '@/components/ui/Chip'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { StepProgress } from '@/components/ui/ProgressBar'
 import { AvailabilityForm, DEFAULT_AVAILABILITY, availabilitySummary, type AvailabilityValue } from '@/components/AvailabilityForm'
 import { api, ApiError, errorMessage } from '@/lib/api'
 import { invalidateStudy } from '@/lib/query'
 import { track } from '@/lib/analytics'
-import { FONTS } from '@/lib/constants'
-import { makeThemedStyles } from '@/lib/theme'
+import { ONBOARDING_STEPS } from '@/lib/onboarding'
+import { SPACE } from '@/lib/constants'
 import type { Depth, Level, Style } from '@/lib/types'
 
-const SUGGESTIONS = ['História do Brasil', 'Finanças pessoais', 'Python', 'Inglês para viagem', 'Filosofia', 'Fotografia com celular']
+const SUGGESTIONS = [
+  'História do Brasil',
+  'Finanças pessoais',
+  'Python do zero',
+  'Inglês para viagem',
+  'Filosofia antiga',
+  'Fotografia com o celular',
+]
 
 const LEVELS: { value: Level; title: string; description: string }[] = [
   { value: 'beginner', title: 'Do zero', description: 'Nunca estudei esse assunto.' },
@@ -38,8 +52,9 @@ const STYLES: { value: Style; label: string }[] = [
   { value: 'practice', label: 'Mais prática' },
 ]
 
+const LAST_STEP = 3
+
 export default function NewSubject() {
-  const s = useStyles()
   const router = useRouter()
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>()
   const isOnboarding = onboarding === '1'
@@ -53,6 +68,7 @@ export default function NewSubject() {
   const [creating, setCreating] = useState(false)
 
   const back = () => (step > 0 ? setStep(step - 1) : router.back())
+  const next = () => setStep(Math.min(LAST_STEP, step + 1))
 
   const create = async () => {
     setCreating(true)
@@ -86,87 +102,88 @@ export default function NewSubject() {
     }
   }
 
-  const steps = [
-    {
-      title: 'O que você quer aprender?',
-      subtitle: 'Pode ser qualquer assunto. Quanto mais claro o objetivo, melhor a trilha.',
+  const progress = <StepProgress total={isOnboarding ? ONBOARDING_STEPS : LAST_STEP + 1} current={isOnboarding ? step + 1 : step} />
+
+  if (step === 0) {
+    return (
+      <Screen back onBack={back}>
+        <PageHeader title="O que você quer aprender?" subtitle="Pode ser qualquer assunto. Escreva do seu jeito.">
+          {progress}
+        </PageHeader>
+        <Composer
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Ex.: história do Brasil"
+          onSubmit={next}
+          maxLength={120}
+          autoFocus={!isOnboarding}
+        />
+        <SectionHeader title="Ou comece por um destes" />
+        {SUGGESTIONS.map((x) => (
+          <ListRow key={x} variant="divided" title={x} onPress={() => { setTitle(x); next() }} chevron />
+        ))}
+      </Screen>
+    )
+  }
+
+  const steps = {
+    1: {
+      title: 'Qual é o seu objetivo?',
+      subtitle: `Sobre ${title.trim()}. Quanto mais claro o objetivo, melhor a trilha.`,
       body: (
         <>
-          <TextField value={title} onChangeText={setTitle} placeholder="Ex.: História do Brasil" maxLength={120} autoFocus={!isOnboarding} />
-          <View style={s.suggestions}>
-            {SUGGESTIONS.map((x) => <Chip key={x} label={x} selected={title === x} onPress={() => setTitle(x)} />)}
-          </View>
           <TextField
-            label="Qual é o seu objetivo? (opcional)"
             value={goal}
             onChangeText={setGoal}
             placeholder="Ex.: entender a formação do país para o ENEM"
             multiline
             maxLength={600}
-            style={{ marginTop: 20 }}
+            hint="Opcional"
           />
-          <Text style={s.section}>Quanto você já sabe?</Text>
+          <SectionHeader title="Quanto você já sabe?" style={{ marginTop: SPACE.lg }} />
           {LEVELS.map((l) => (
-            <OptionCard key={l.value} title={l.title} description={l.description} selected={level === l.value} onPress={() => setLevel(l.value)} />
+            <RadioCard key={l.value} title={l.title} description={l.description} selected={level === l.value} onPress={() => setLevel(l.value)} />
           ))}
         </>
       ),
-      canNext: title.trim().length >= 2,
     },
-    {
+    2: {
       title: 'Quanto tempo você tem?',
       subtitle: 'O cronograma é montado em cima disso e nunca passa do tempo que você informar.',
       body: <AvailabilityForm value={availability} onChange={setAvailability} />,
-      canNext: true,
     },
-    {
+    3: {
       title: 'Como você quer estudar?',
       subtitle: availabilitySummary(availability),
       body: (
         <>
-          <Text style={s.section}>Até onde quer ir?</Text>
-          {availability.deadline ? (
-            <Text style={s.hint}>Com prazo, a trilha é montada para caber nele. A profundidade diz o que priorizar.</Text>
-          ) : null}
+          <SectionHeader
+            title="Até onde quer ir?"
+            description={availability.deadline ? 'Com prazo, a trilha cabe nele. A profundidade diz o que priorizar.' : null}
+            style={{ marginTop: 0 }}
+          />
           {DEPTHS.map((d) => (
-            <OptionCard key={d.value} title={d.title} description={d.description} selected={depth === d.value} onPress={() => setDepth(d.value)} />
+            <RadioCard key={d.value} title={d.title} description={d.description} selected={depth === d.value} onPress={() => setDepth(d.value)} />
           ))}
-          <Text style={s.section}>Estilo das aulas</Text>
+          <SectionHeader title="Estilo das aulas" />
           <ChipGroup options={STYLES} value={style} onChange={setStyle} />
         </>
       ),
-      canNext: true,
     },
-  ]
-  const current = steps[step]
-  const last = step === steps.length - 1
+  }[step as 1 | 2 | 3]
 
   return (
     <Screen
       back
       onBack={back}
-      surface="white"
       footer={
-        <Button
-          label={last ? 'Montar minha trilha' : 'Continuar'}
-          onPress={last ? create : () => setStep(step + 1)}
-          disabled={!current.canNext}
-          loading={creating}
-        />
+        step === LAST_STEP
+          ? <Button label="Montar minha trilha" onPress={create} loading={creating} />
+          : <Button label="Continuar" onPress={next} />
       }
     >
-      <StepDots total={isOnboarding ? 4 : 3} current={isOnboarding ? step + 1 : step} />
-      <Text style={s.title}>{current.title}</Text>
-      <Text style={s.subtitle}>{current.subtitle}</Text>
-      {current.body}
+      <PageHeader title={steps.title} subtitle={steps.subtitle}>{progress}</PageHeader>
+      <View>{steps.body}</View>
     </Screen>
   )
 }
-
-const useStyles = makeThemedStyles((c) => ({
-  title: { fontFamily: FONTS.extraBold, fontSize: 28, lineHeight: 34, color: c.gray900, marginTop: 24, marginBottom: 8 },
-  subtitle: { fontFamily: FONTS.regular, fontSize: 16, color: c.gray600, lineHeight: 23, marginBottom: 20 },
-  suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -4 },
-  section: { fontFamily: FONTS.bold, fontSize: 16, color: c.gray900, marginTop: 24, marginBottom: 12 },
-  hint: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: -6, marginBottom: 12, lineHeight: 18 },
-}))

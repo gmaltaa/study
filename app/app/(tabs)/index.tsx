@@ -1,26 +1,32 @@
-// app/(tabs)/index.tsx — Hoje. A tela que responde, em segundos, "o que eu
-// estudo hoje?": as sessões do dia de todos os temas, a sequência de dias e,
+// app/(tabs)/index.tsx — Hoje. Responde em segundos "o que eu estudo hoje?":
+// a saudação, as sessões do dia de todos os temas, a sequência de dias e,
 // para os temas sem sessão hoje, quando é a próxima.
 import { Alert, RefreshControl, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { CheckCircle, CircleIcon as Circle, Fire, Plus, Sparkle } from 'phosphor-react-native'
-import { Text } from '@/components/Text'
-import { Screen } from '@/components/Screen'
-import { Card } from '@/components/Card'
-import { Button } from '@/components/Button'
-import { SubjectIcon } from '@/components/SubjectIcon'
-import { EmptyView, ErrorView, LoadingView } from '@/components/StateView'
+import { BookOpenTextIcon, FireIcon, PlusIcon } from 'phosphor-react-native'
+import { Text } from '@/components/ui/Text'
+import { Screen } from '@/components/ui/Screen'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Cover } from '@/components/ui/Cover'
+import { IconButton } from '@/components/ui/IconButton'
+import { ListGroup } from '@/components/ui/ListGroup'
+import { ListRow } from '@/components/ui/ListRow'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { Tag } from '@/components/ui/Tag'
+import { EmptyView, ErrorView, LoadingView } from '@/components/ui/StateView'
+import { SessionCard } from '@/components/SessionCard'
+import { SubjectCard } from '@/components/SubjectCard'
 import { api, errorMessage } from '@/lib/api'
 import { invalidateStudy, keys } from '@/lib/query'
 import { useAuth } from '@/lib/auth'
-import { FONTS } from '@/lib/constants'
+import { SPACE } from '@/lib/constants'
 import { formatDate, greeting, relativeDay, WEEKDAYS_LONG } from '@/lib/format'
-import { makeThemedStyles, useColors } from '@/lib/theme'
-import type { SubjectSummary, TodaySession } from '@/lib/types'
+import { useColors } from '@/lib/theme'
+import type { SubjectSummary } from '@/lib/types'
 
 export default function TodayScreen() {
-  const s = useStyles()
   const c = useColors()
   const router = useRouter()
   const { profile } = useAuth()
@@ -37,6 +43,11 @@ export default function TodayScreen() {
   })
 
   const refresh = () => { void today.refetch(); void subjects.refetch() }
+  const newSubject = (
+    <IconButton variant="outline" onPress={() => router.push('/tema/novo')} accessibilityLabel="Novo tema">
+      <PlusIcon />
+    </IconButton>
+  )
 
   if (today.isLoading) return <Screen scroll={false}><LoadingView /></Screen>
   if (today.isError || !today.data) {
@@ -45,192 +56,110 @@ export default function TodayScreen() {
 
   const { sessions, later, streak, date } = today.data
   const all = subjects.data ?? []
-  const pending = all.filter((x) => x.status === 'generating' || x.status === 'review' || x.status === 'failed')
-  const active = all.filter((x) => x.status === 'active')
+  const waiting = all.filter((x) => x.status === 'generating' || x.status === 'review' || x.status === 'failed')
+  const active = all.filter((x) => x.status === 'active' && x.nextLesson)
   const allDone = sessions.length > 0 && sessions.every((x) => x.status === 'completed')
-  const minutesLeft = sessions
-    .filter((x) => x.status !== 'completed')
-    .reduce((n, x) => n + x.lessons.filter((l) => !l.completed).reduce((m, l) => m + l.minutes, 0), 0)
+  const pending = sessions.filter((x) => x.status !== 'completed')
+  const minutesLeft = pending.reduce((n, x) => n + x.lessons.filter((l) => !l.completed).reduce((m, l) => m + l.minutes, 0), 0)
   const firstName = profile?.displayName?.split(' ')[0]
   const weekday = WEEKDAYS_LONG[new Date(`${date}T12:00:00`).getDay()]
+  const summary = sessions.length === 0
+    ? 'Nada marcado para hoje.'
+    : allDone
+      ? 'Tudo feito por hoje.'
+      : `${pending.length} ${pending.length === 1 ? 'sessão' : 'sessões'} · ${minutesLeft} min`
+
+  const advance = (list: SubjectSummary[]) => (
+    <View style={{ gap: SPACE.sm, marginTop: SPACE.lg }}>
+      {list.map((x) => (
+        <Button
+          key={x.id}
+          label={`Adiantar ${x.title}`}
+          variant="secondary"
+          size="md"
+          onPress={() => extra.mutate(x.id)}
+          loading={extra.isPending && extra.variables === x.id}
+        />
+      ))}
+    </View>
+  )
 
   return (
-    <Screen refreshControl={<RefreshControl refreshing={today.isRefetching} onRefresh={refresh} tintColor={c.primary} />}>
-      <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.date}>{weekday}, {formatDate(date)}</Text>
-          <Text style={s.hello}>{greeting()}{firstName ? `, ${firstName}` : ''}</Text>
-        </View>
-        <View style={[s.streak, streak.studiedToday && s.streakOn]}>
-          <Fire size={18} color={streak.studiedToday ? c.accent : c.gray500} weight="fill" />
-          <Text style={[s.streakText, streak.studiedToday && s.streakTextOn]}>{streak.current}</Text>
-        </View>
+    <Screen
+      right={newSubject}
+      refreshControl={<RefreshControl refreshing={today.isRefetching} onRefresh={refresh} tintColor={c.text} />}
+    >
+      <View style={{ gap: SPACE.sm, paddingTop: SPACE.sm }}>
+        <Tag
+          label={`${streak.current} ${streak.current === 1 ? 'dia seguido' : 'dias seguidos'}`}
+          variant={streak.studiedToday ? 'accent' : 'muted'}
+          icon={<FireIcon />}
+        />
+        <Text variant="display" accessibilityRole="header">{greeting()}{firstName ? `, ${firstName}` : ''}</Text>
+        <Text variant="body" tone="secondary">
+          <Text variant="body" tone="secondary" style={{ textTransform: 'capitalize' }}>{weekday}</Text>, {formatDate(date)} · {summary}
+        </Text>
       </View>
 
-      {pending.map((x) => <PendingBanner key={x.id} subject={x} />)}
+      {waiting.length > 0 ? (
+        <>
+          <SectionHeader title="Esperando você" />
+          <View style={{ gap: SPACE.md }}>
+            {waiting.map((x) => (
+              <SubjectCard key={x.id} subject={x} compact onPress={() => router.push({ pathname: '/tema/[id]', params: { id: x.id } })} />
+            ))}
+          </View>
+        </>
+      ) : null}
 
       {sessions.length > 0 ? (
         <>
-          <Text style={s.section}>
-            {allDone ? 'Tudo feito por hoje' : `Para hoje · ${minutesLeft} min`}
-          </Text>
+          <SectionHeader title="Para hoje" />
           {allDone ? (
-            <Card style={s.doneCard}>
-              <Sparkle size={28} color={c.accent} weight="fill" />
-              <Text style={s.doneTitle}>Você cumpriu o dia!</Text>
-              <Text style={s.doneText}>
-                {streak.current > 1 ? `${streak.current} dias de estudo seguidos. ` : ''}Quer adiantar a próxima aula?
+            <Card variant="muted" style={{ marginBottom: SPACE.md }}>
+              <Text variant="heading">Dia cumprido.</Text>
+              <Text variant="body" tone="secondary" style={{ marginTop: SPACE.xs }}>
+                {streak.current > 1 ? `${streak.current} dias de estudo seguidos. ` : ''}Se estiver no pique, dá para adiantar a próxima aula.
               </Text>
-              <View style={s.extraRow}>
-                {active.filter((x) => x.nextLesson).map((x) => (
-                  <Button
-                    key={x.id}
-                    label={`${x.icon} ${x.title}`}
-                    variant="secondary"
-                    onPress={() => extra.mutate(x.id)}
-                    loading={extra.isPending && extra.variables === x.id}
-                  />
-                ))}
-              </View>
+              {advance(active)}
             </Card>
           ) : null}
-          {sessions.map((x) => <SessionCard key={x.id} session={x} />)}
+          <View style={{ gap: SPACE.md }}>
+            {sessions.map((x) => <SessionCard key={x.id} session={x} />)}
+          </View>
         </>
       ) : active.length > 0 ? (
-        <Card style={s.restCard}>
-          <Text style={s.doneTitle}>Hoje não tem sessão marcada</Text>
-          <Text style={s.doneText}>Aproveite o descanso, ou adiante uma aula se estiver no pique.</Text>
-          <View style={s.extraRow}>
-            {active.filter((x) => x.nextLesson).map((x) => (
-              <Button
-                key={x.id}
-                label={`${x.icon} ${x.title}`}
-                variant="secondary"
-                onPress={() => extra.mutate(x.id)}
-                loading={extra.isPending && extra.variables === x.id}
-              />
-            ))}
-          </View>
+        <Card variant="muted" style={{ marginTop: SPACE.xxl }}>
+          <Text variant="heading">Hoje não tem sessão marcada.</Text>
+          <Text variant="body" tone="secondary" style={{ marginTop: SPACE.xs }}>Aproveite o descanso, ou adiante uma aula.</Text>
+          {advance(active)}
         </Card>
-      ) : pending.length === 0 && subjects.isSuccess ? (
+      ) : waiting.length === 0 && subjects.isSuccess ? (
         <EmptyView
+          icon={<BookOpenTextIcon />}
           title="O que você quer aprender?"
           message="Crie um tema, diga quanto tempo tem e a gente monta a trilha do zero ao avançado."
-          action={<Button label="Criar meu primeiro tema" icon={<Plus size={18} color={c.onPrimary} weight="bold" />} onPress={() => router.push('/tema/novo')} />}
+          action={<Button label="Criar meu primeiro tema" onPress={() => router.push('/tema/novo')} />}
         />
       ) : null}
 
       {later.length > 0 ? (
         <>
-          <Text style={s.section}>Próximos dias</Text>
-          {later.map((x) => (
-            <Card key={x.id} style={s.laterCard} onPress={() => router.push({ pathname: '/tema/[id]', params: { id: x.id } })}>
-              <SubjectIcon icon={x.icon} color={x.color} size={40} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.laterTitle}>{x.title}</Text>
-                {x.nextLesson ? <Text style={s.laterMeta} numberOfLines={1}>{x.nextLesson.title}</Text> : null}
-              </View>
-              {x.nextSessionDate ? <Text style={s.laterDay}>{relativeDay(x.nextSessionDate, date)}</Text> : null}
-            </Card>
-          ))}
+          <SectionHeader title="Próximos dias" />
+          <ListGroup inset={64}>
+            {later.map((x) => (
+              <ListRow
+                key={x.id}
+                leading={<Cover icon={x.icon} color={x.color} size={36} />}
+                title={x.title}
+                subtitle={x.nextLesson?.title}
+                value={x.nextSessionDate ? relativeDay(x.nextSessionDate, date) : null}
+                onPress={() => router.push({ pathname: '/tema/[id]', params: { id: x.id } })}
+              />
+            ))}
+          </ListGroup>
         </>
       ) : null}
     </Screen>
   )
 }
-
-function SessionCard({ session }: { session: TodaySession }) {
-  const s = useStyles()
-  const c = useColors()
-  const router = useRouter()
-  const done = session.status === 'completed'
-  const next = session.lessons.find((l) => !l.completed)
-  const started = session.lessons.some((l) => l.completed) || session.status === 'in_progress'
-  const minutes = session.lessons.reduce((n, l) => n + l.minutes, 0)
-
-  return (
-    <Card style={[s.sessionCard, done && s.sessionDone]}>
-      <View style={s.sessionHeader}>
-        <SubjectIcon icon={session.subject.icon} color={session.subject.color} size={40} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.sessionSubject}>{session.subject.title}</Text>
-          <Text style={s.sessionMeta}>{session.isExtra ? 'Aula extra' : `Sessão ${session.slot}`} · {minutes} min</Text>
-        </View>
-        {done ? <CheckCircle size={26} color={c.green} weight="fill" /> : null}
-      </View>
-      <View style={s.lessons}>
-        {session.lessons.map((l) => (
-          <View key={l.id} style={s.lessonRow}>
-            {l.completed ? <CheckCircle size={18} color={c.green} weight="fill" /> : <Circle size={18} color={c.gray300} weight="bold" />}
-            <Text style={[s.lessonTitle, l.completed && s.lessonDone]} numberOfLines={2}>{l.title}</Text>
-            <Text style={s.lessonMin}>{l.minutes} min</Text>
-          </View>
-        ))}
-      </View>
-      {!done && next ? (
-        <Button
-          label={started ? 'Continuar' : 'Começar'}
-          onPress={() => router.push({ pathname: '/aula/[id]', params: { id: next.id, sessionId: session.id } })}
-          style={{ marginTop: 14 }}
-        />
-      ) : null}
-    </Card>
-  )
-}
-
-function PendingBanner({ subject }: { subject: SubjectSummary }) {
-  const s = useStyles()
-  const router = useRouter()
-  const text = subject.status === 'generating'
-    ? 'Montando a trilha…'
-    : subject.status === 'review'
-      ? 'Trilha pronta. Toque para revisar e começar.'
-      : 'Não conseguimos montar a trilha. Toque para tentar de novo.'
-  return (
-    <Card style={s.banner} onPress={() => router.push({ pathname: '/tema/[id]', params: { id: subject.id } })}>
-      <SubjectIcon icon={subject.icon} color={subject.color} size={36} />
-      <View style={{ flex: 1 }}>
-        <Text style={s.bannerTitle}>{subject.title}</Text>
-        <Text style={s.bannerText}>{text}</Text>
-      </View>
-    </Card>
-  )
-}
-
-const useStyles = makeThemedStyles((c) => ({
-  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingBottom: 8 },
-  date: { fontFamily: FONTS.semiBold, fontSize: 14, color: c.gray500, textTransform: 'capitalize' },
-  hello: { fontFamily: FONTS.extraBold, fontSize: 28, color: c.gray900, marginTop: 2 },
-  streak: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: c.gray100 },
-  streakOn: { backgroundColor: c.accentSoft },
-  streakText: { fontFamily: FONTS.bold, fontSize: 16, color: c.gray600 },
-  streakTextOn: { color: c.gray900 },
-
-  section: { fontFamily: FONTS.bold, fontSize: 18, color: c.gray900, marginTop: 24, marginBottom: 12 },
-
-  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, borderColor: c.primaryBorder, backgroundColor: c.primarySoft },
-  bannerTitle: { fontFamily: FONTS.bold, fontSize: 15, color: c.gray900 },
-  bannerText: { fontFamily: FONTS.regular, fontSize: 14, color: c.gray700, marginTop: 2 },
-
-  sessionCard: { marginBottom: 12 },
-  sessionDone: { opacity: 0.75 },
-  sessionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  sessionSubject: { fontFamily: FONTS.bold, fontSize: 17, color: c.gray900 },
-  sessionMeta: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: 2 },
-  lessons: { marginTop: 12, gap: 8 },
-  lessonRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  lessonTitle: { flex: 1, fontFamily: FONTS.medium, fontSize: 15, color: c.gray900, lineHeight: 20 },
-  lessonDone: { color: c.gray500, textDecorationLine: 'line-through' },
-  lessonMin: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500 },
-
-  doneCard: { alignItems: 'center', marginBottom: 12, gap: 6 },
-  restCard: { alignItems: 'center', marginTop: 20, gap: 6 },
-  doneTitle: { fontFamily: FONTS.extraBold, fontSize: 18, color: c.gray900, textAlign: 'center' },
-  doneText: { fontFamily: FONTS.regular, fontSize: 15, color: c.gray600, textAlign: 'center', lineHeight: 21 },
-  extraRow: { alignSelf: 'stretch', gap: 8, marginTop: 10 },
-
-  laterCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  laterTitle: { fontFamily: FONTS.bold, fontSize: 15, color: c.gray900 },
-  laterMeta: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: 2 },
-  laterDay: { fontFamily: FONTS.semiBold, fontSize: 13, color: c.primary, textTransform: 'capitalize' },
-}))

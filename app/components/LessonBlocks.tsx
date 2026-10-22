@@ -1,12 +1,15 @@
 // components/LessonBlocks.tsx — desenha o conteúdo da aula, bloco a bloco.
 // O formato dos blocos é o que o backend grava (lib/ai/schemas.ts → Block).
+// Texto corrido em serifa, como num livro; caixas de apoio em sans.
 import type { ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
-import { Lightbulb, Warning, Star } from 'phosphor-react-native'
-import { Text } from '@/components/Text'
-import { FONTS } from '@/lib/constants'
+import { CheckIcon, LightbulbIcon, WarningIcon } from 'phosphor-react-native'
+import { Text } from '@/components/ui/Text'
+import { Card } from '@/components/ui/Card'
+import { RADIUS, SPACE } from '@/lib/constants'
 import { makeThemedStyles, useColors } from '@/lib/theme'
 import type { Block } from '@/lib/types'
+
 
 export function LessonBlocks({ blocks, renderMedia }: {
   blocks: Block[]
@@ -16,69 +19,66 @@ export function LessonBlocks({ blocks, renderMedia }: {
   const s = useStyles()
   const c = useColors()
   return (
-    <View style={s.wrap}>
+    <View style={{ gap: SPACE.lg }}>
       {blocks.map((b, i) => {
         switch (b.type) {
           case 'media': {
             const node = renderMedia?.(b.ref)
-            return node ? <View key={i} style={s.media}>{node}</View> : null
+            return node ? <View key={i} style={{ marginVertical: SPACE.sm }}>{node}</View> : null
           }
           case 'heading':
-            return <Text key={i} style={s.heading}>{b.text}</Text>
+            return <Text key={i} variant="heading" style={{ marginTop: SPACE.md }}>{b.text}</Text>
           case 'paragraph':
-            return <Text key={i} style={s.paragraph}>{b.text}</Text>
+            return <Text key={i} variant="reading">{b.text}</Text>
           case 'quote':
-            return <View key={i} style={s.quote}><Text style={s.quoteText}>{b.text}</Text></View>
+            return <View key={i} style={s.quote}><Text variant="quote" tone="secondary">{b.text}</Text></View>
           case 'list':
             return (
-              <View key={i} style={s.list}>
+              <View key={i} style={{ gap: SPACE.sm }}>
                 {b.items.map((item, j) => (
-                  <View key={j} style={s.listRow}>
+                  <View key={j} style={s.bulletRow}>
                     <View style={s.bullet} />
-                    <Text style={s.listText}>{item}</Text>
+                    <Text variant="reading" style={{ flex: 1 }}>{item}</Text>
                   </View>
                 ))}
               </View>
             )
           case 'key_points':
             return (
-              <View key={i} style={[s.box, s.keyBox]}>
-                <View style={s.boxHeader}>
-                  <Star size={18} color={c.primary} weight="fill" />
-                  <Text style={[s.boxTitle, { color: c.primarySoftText }]}>{b.title ?? 'Para lembrar'}</Text>
-                </View>
+              <Card key={i} variant="muted" style={{ gap: SPACE.md }}>
+                <Text variant="eyebrow">{b.title ?? 'Para lembrar'}</Text>
                 {b.items.map((item, j) => (
-                  <View key={j} style={s.listRow}>
-                    <View style={[s.bullet, { backgroundColor: c.primary }]} />
-                    <Text style={s.listText}>{item}</Text>
+                  <View key={j} style={s.checkRow}>
+                    <CheckIcon size={16} color={c.text} style={{ marginTop: 3 }} />
+                    <Text variant="body" style={{ flex: 1 }}>{item}</Text>
                   </View>
                 ))}
-              </View>
+              </Card>
             )
           case 'example':
             return (
-              <View key={i} style={[s.box, s.exampleBox]}>
+              <Card key={i} style={{ gap: SPACE.sm }}>
                 <View style={s.boxHeader}>
-                  <Lightbulb size={18} color={c.blue} weight="fill" />
-                  <Text style={[s.boxTitle, { color: c.blue }]}>{b.title ?? 'Exemplo'}</Text>
+                  <LightbulbIcon size={18} color={c.text} />
+                  <Text variant="labelStrong">{b.title ?? 'Exemplo'}</Text>
                 </View>
-                <Text style={s.boxText}>{b.text}</Text>
-              </View>
+                <Text variant="body" tone="secondary">{b.text}</Text>
+              </Card>
             )
           case 'callout':
             return (
-              <View key={i} style={[s.box, s.calloutBox]}>
+              <View key={i} style={s.callout}>
                 <View style={s.boxHeader}>
-                  <Warning size={18} color={c.yellow} weight="fill" />
-                  <Text style={[s.boxTitle, { color: c.yellow }]}>{b.title ?? 'Atenção'}</Text>
+                  <WarningIcon size={18} color={c.warning} />
+                  <Text variant="labelStrong" tone="warning">{b.title ?? 'Atenção'}</Text>
                 </View>
-                <Text style={s.boxText}>{b.text}</Text>
+                <Text variant="body">{b.text}</Text>
               </View>
             )
           case 'code':
             return (
-              <ScrollView key={i} horizontal style={s.code} contentContainerStyle={{ padding: 14 }} showsHorizontalScrollIndicator={false}>
-                <Text style={s.codeText}>{b.text}</Text>
+              <ScrollView key={i} horizontal style={s.code} contentContainerStyle={{ padding: SPACE.lg }} showsHorizontalScrollIndicator={false}>
+                <Text variant="code">{b.text}</Text>
               </ScrollView>
             )
           default:
@@ -90,23 +90,11 @@ export function LessonBlocks({ blocks, renderMedia }: {
 }
 
 const useStyles = makeThemedStyles((c) => ({
-  wrap: { gap: 14 },
-  media: { marginVertical: 6 },
-  heading: { fontFamily: FONTS.extraBold, fontSize: 20, color: c.gray900, marginTop: 10, lineHeight: 26 },
-  paragraph: { fontFamily: FONTS.regular, fontSize: 17, color: c.gray700, lineHeight: 27 },
-  quote: { borderLeftWidth: 3, borderLeftColor: c.primary, paddingLeft: 14, paddingVertical: 2 },
-  quoteText: { fontFamily: FONTS.medium, fontSize: 17, color: c.gray600, lineHeight: 26, fontStyle: 'italic' },
-  list: { gap: 8 },
-  listRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.gray500, marginTop: 11 },
-  listText: { flex: 1, fontFamily: FONTS.regular, fontSize: 17, color: c.gray700, lineHeight: 26 },
-  box: { borderRadius: 16, padding: 16, gap: 8 },
-  keyBox: { backgroundColor: c.primarySoft },
-  exampleBox: { backgroundColor: c.blueLight },
-  calloutBox: { backgroundColor: c.yellowLight },
-  boxHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  boxTitle: { fontFamily: FONTS.bold, fontSize: 15 },
-  boxText: { fontFamily: FONTS.regular, fontSize: 16, color: c.gray700, lineHeight: 25 },
-  code: { backgroundColor: c.navy, borderRadius: 12 },
-  codeText: { fontFamily: 'monospace', fontSize: 14, color: c.staticWhite, lineHeight: 21 },
+  quote: { borderLeftWidth: 2, borderLeftColor: c.text, paddingLeft: SPACE.lg, paddingVertical: SPACE.xs },
+  bulletRow: { flexDirection: 'row', gap: SPACE.md, alignItems: 'flex-start' },
+  bullet: { width: 5, height: 5, borderRadius: 3, backgroundColor: c.textSecondary, marginTop: 12 },
+  checkRow: { flexDirection: 'row', gap: SPACE.sm, alignItems: 'flex-start' },
+  boxHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  callout: { backgroundColor: c.warningSoft, borderRadius: RADIUS.xl, padding: SPACE.lg, gap: SPACE.sm },
+  code: { backgroundColor: c.surfaceMuted, borderRadius: RADIUS.lg },
 }))

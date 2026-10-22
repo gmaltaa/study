@@ -1,19 +1,17 @@
 // app/reset-password.tsx — senha nova, depois do código de recuperação.
 import { useState } from 'react'
 import { Alert } from 'react-native'
-import { Text } from '@/components/Text'
-import { Screen } from '@/components/Screen'
-import { TextField } from '@/components/Field'
-import { Button } from '@/components/Button'
+import { Screen } from '@/components/ui/Screen'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { TextField } from '@/components/ui/TextField'
+import { Button } from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authError'
 import { useAuth } from '@/lib/auth'
 import { toast } from '@/lib/toast'
-import { FONTS } from '@/lib/constants'
-import { makeThemedStyles } from '@/lib/theme'
+import { SPACE } from '@/lib/constants'
 
 export default function ResetPassword() {
-  const s = useStyles()
   const { endRecovery, signOut } = useAuth()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -36,18 +34,12 @@ export default function ResetPassword() {
   }
 
   return (
-    <Screen surface="white">
-      <Text style={s.title}>Crie uma senha nova</Text>
-      <Text style={s.subtitle}>Use pelo menos 6 caracteres.</Text>
+    <Screen>
+      <PageHeader title="Crie uma senha nova" subtitle="Use pelo menos 6 caracteres." style={{ paddingTop: SPACE.xxl }} />
       <TextField label="Senha nova" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoComplete="password-new" />
       <TextField label="Repita a senha" value={confirm} onChangeText={setConfirm} secureTextEntry autoCapitalize="none" autoComplete="password-new" />
-      <Button label="Salvar senha" onPress={submit} loading={loading} disabled={!password || !confirm} style={{ marginTop: 8 }} />
-      <Button label="Cancelar" variant="ghost" onPress={() => { endRecovery(); void signOut() }} style={{ marginTop: 8 }} />
+      <Button label="Salvar senha" onPress={submit} loading={loading} disabled={!password || !confirm} style={{ marginTop: SPACE.sm }} />
+      <Button label="Cancelar" variant="ghost" onPress={() => { endRecovery(); void signOut() }} />
     </Screen>
   )
 }
-
-const useStyles = makeThemedStyles((c) => ({
-  title: { fontFamily: FONTS.extraBold, fontSize: 30, color: c.gray900, marginTop: 24, marginBottom: 6 },
-  subtitle: { fontFamily: FONTS.medium, fontSize: 16, color: c.gray500, marginBottom: 28 },
-}))

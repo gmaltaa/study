@@ -1,11 +1,11 @@
-// components/CodeForm.tsx — digitar o código de 6 dígitos enviado por e-mail,
-// com reenvio após 60 s. Usado na confirmação de cadastro e na recuperação de senha.
+// components/CodeForm.tsx — o código de 6 dígitos enviado por e-mail, com
+// reenvio após 60 s. Confirmação de cadastro e recuperação de senha.
 import { useEffect, useState } from 'react'
-import { Alert } from 'react-native'
-import { Text, TextInput } from '@/components/Text'
-import { Button } from '@/components/Button'
-import { FONTS } from '@/lib/constants'
-import { makeThemedStyles, useColors } from '@/lib/theme'
+import { Alert, View } from 'react-native'
+import { Text, TextInput } from '@/components/ui/Text'
+import { Button } from '@/components/ui/Button'
+import { HAIRLINE, RADIUS, SPACE } from '@/lib/constants'
+import { makeThemedStyles } from '@/lib/theme'
 
 const RESEND_COOLDOWN = 60
 
@@ -16,7 +16,6 @@ export function CodeForm({ title, email, onVerify, onResend }: {
   onResend: () => Promise<void>
 }) {
   const s = useStyles()
-  const c = useColors()
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [resending, setResending] = useState(false)
@@ -49,38 +48,39 @@ export function CodeForm({ title, email, onVerify, onResend }: {
   }
 
   return (
-    <>
-      <Text style={s.title}>{title}</Text>
-      <Text style={s.desc}>Mandamos um código de 6 dígitos para {email}.</Text>
+    <View style={{ gap: SPACE.sm }}>
+      <Text variant="title">{title}</Text>
+      <Text variant="body" tone="secondary" style={{ marginBottom: SPACE.xl }}>
+        Mandamos um código de 6 dígitos para {email}.
+      </Text>
       <TextInput
+        variant="title"
         style={s.code}
         value={code}
         onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
         placeholder="000000"
-        placeholderTextColor={c.gray300}
         keyboardType="number-pad"
+        textContentType="oneTimeCode"
+        autoComplete="one-time-code"
         maxLength={6}
         autoFocus
         textAlign="center"
       />
-      <Button label="Confirmar" onPress={verify} loading={verifying} disabled={code.length < 6} style={{ marginTop: 20 }} />
+      <Button label="Confirmar" onPress={verify} loading={verifying} disabled={code.length < 6} style={{ marginTop: SPACE.lg }} />
       <Button
-        label={cooldown > 0 ? `Reenviar código em ${cooldown}s` : 'Reenviar código'}
+        label={cooldown > 0 ? `Reenviar em ${cooldown}s` : 'Reenviar código'}
         variant="ghost"
         onPress={resend}
         loading={resending}
         disabled={cooldown > 0}
-        style={{ marginTop: 6 }}
       />
-    </>
+    </View>
   )
 }
 
 const useStyles = makeThemedStyles((c) => ({
-  title: { fontFamily: FONTS.extraBold, fontSize: 28, color: c.gray900, marginBottom: 8 },
-  desc: { fontFamily: FONTS.regular, fontSize: 15, color: c.gray500, lineHeight: 22, marginBottom: 26 },
   code: {
-    borderWidth: 1.5, borderColor: c.gray200, borderRadius: 16, backgroundColor: c.white,
-    paddingVertical: 18, fontFamily: FONTS.extraBold, fontSize: 30, color: c.gray900, letterSpacing: 8,
+    height: 68, borderRadius: RADIUS.lg, borderWidth: HAIRLINE, borderColor: c.borderStrong,
+    backgroundColor: c.surface, letterSpacing: 10,
   },
 }))

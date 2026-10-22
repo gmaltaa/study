@@ -2,29 +2,36 @@
 //   generating → a trilha está sendo montada (consulta a cada 3 s)
 //   failed     → deu errado, tentar de novo
 //   review     → prévia da trilha: começar ou pedir ajuste
-//   active / paused / completed → progresso, próximas sessões e a trilha
+//   active / paused / completed → progresso, o que vem a seguir e a trilha
 import { useState } from 'react'
 import { ActivityIndicator, Alert, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Archive, CalendarBlank, CaretRightIcon, Clock, FilmStripIcon, Pause, PencilSimple, Play, Trash, Warning } from 'phosphor-react-native'
-import { Text } from '@/components/Text'
-import { Screen } from '@/components/Screen'
-import { Card } from '@/components/Card'
-import { Button } from '@/components/Button'
-import { ProgressBar } from '@/components/ProgressBar'
+import {
+  ArchiveIcon, CalendarBlankIcon, CircleDashedIcon, ClockIcon, FilmStripIcon, PauseIcon, PlayCircleIcon, PlayIcon,
+  TrashIcon, WarningIcon,
+} from 'phosphor-react-native'
+import { Text } from '@/components/ui/Text'
+import { Screen } from '@/components/ui/Screen'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Cover } from '@/components/ui/Cover'
+import { Composer } from '@/components/ui/Composer'
+import { ListGroup } from '@/components/ui/ListGroup'
+import { ListRow } from '@/components/ui/ListRow'
+import { ProgressBar } from '@/components/ui/ProgressBar'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { Sheet } from '@/components/ui/Sheet'
+import { Tag } from '@/components/ui/Tag'
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet'
+import { ErrorView, LoadingView } from '@/components/ui/StateView'
 import { ModuleList } from '@/components/ModuleList'
-import { SubjectIcon } from '@/components/SubjectIcon'
-import { TextField } from '@/components/Field'
-import { BottomSheet } from '@/components/BottomSheet'
-import { ConfirmSheet } from '@/components/ConfirmSheet'
-import { ErrorView, LoadingView } from '@/components/StateView'
 import { api, ApiError, errorMessage } from '@/lib/api'
 import { invalidateStudy, keys, queryClient } from '@/lib/query'
 import { setProfileCache, useAuth } from '@/lib/auth'
 import { track } from '@/lib/analytics'
 import { toast } from '@/lib/toast'
-import { FONTS, GUTTER } from '@/lib/constants'
+import { GUTTER, RADIUS, SPACE } from '@/lib/constants'
 import { formatDate, formatDays, formatHours, formatMinutes, relativeDay, toISODate } from '@/lib/format'
 import { makeThemedStyles, useColors } from '@/lib/theme'
 import type { SubjectDetail } from '@/lib/types'
@@ -53,6 +60,32 @@ function setSubject(data: SubjectDetail) {
   invalidateStudy()
 }
 
+/** Capa e título do tema, no topo das telas do tema. */
+function SubjectHero({ subject, eyebrow }: { subject: SubjectDetail; eyebrow?: string | null }) {
+  const s = useStyles()
+  return (
+    <View style={s.hero}>
+      <Cover icon={subject.icon} color={subject.color} size={88} />
+      <View style={{ flex: 1, gap: SPACE.xs }}>
+        {eyebrow ? <Text variant="eyebrow" tone="secondary">{eyebrow}</Text> : null}
+        <Text variant="title" accessibilityRole="header">{subject.title}</Text>
+      </View>
+    </View>
+  )
+}
+
+/** Aviso amarelo: prazo estourado, ajuste que falhou. */
+function Notice({ children }: { children: string }) {
+  const s = useStyles()
+  const c = useColors()
+  return (
+    <View style={s.notice}>
+      <WarningIcon size={18} color={c.warning} />
+      <Text variant="body" style={{ flex: 1 }}>{children}</Text>
+    </View>
+  )
+}
+
 // ─── Gerando ───────────────────────────────────────────────────────────────
 
 const GENERATING_STEPS = [
@@ -63,21 +96,23 @@ const GENERATING_STEPS = [
 ]
 
 function Generating({ subject }: { subject: SubjectDetail }) {
-  const s = useStyles()
   const c = useColors()
   const router = useRouter()
   const { profile } = useAuth()
   const adjusting = !!subject.path?.adjustmentRequest
   return (
-    <Screen back={!!profile?.onboardedAt} onBack={() => router.replace('/')} scroll={false}>
-      <View style={s.center}>
-        <SubjectIcon icon={subject.icon} color={subject.color} size={72} />
-        <Text style={s.bigTitle}>{adjusting ? 'Ajustando sua trilha' : 'Montando sua trilha'}</Text>
-        <Text style={s.centerText}>{subject.title}</Text>
-        <ActivityIndicator color={c.primary} size="large" style={{ marginVertical: 24 }} />
-        {GENERATING_STEPS.map((step) => <Text key={step} style={s.step}>{step}</Text>)}
-        <Text style={s.note}>Leva até 2 minutos. Pode sair desta tela: a trilha fica pronta em Temas.</Text>
+    <Screen back={!!profile?.onboardedAt} onBack={() => router.replace('/')}>
+      <SubjectHero subject={subject} eyebrow={adjusting ? 'Ajustando a trilha' : 'Montando a trilha'} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.md, marginTop: SPACE.xxl }}>
+        <ActivityIndicator color={c.text} />
+        <Text variant="body" tone="secondary">Leva até 2 minutos.</Text>
       </View>
+      <ListGroup style={{ marginTop: SPACE.lg }}>
+        {GENERATING_STEPS.map((step) => <ListRow key={step} leading={<CircleDashedIcon color={c.textTertiary} />} title={step} />)}
+      </ListGroup>
+      <Text variant="caption" tone="tertiary" style={{ marginTop: SPACE.lg }}>
+        Pode sair desta tela. A trilha fica pronta em Temas.
+      </Text>
     </Screen>
   )
 }
@@ -85,7 +120,6 @@ function Generating({ subject }: { subject: SubjectDetail }) {
 // ─── Falhou ────────────────────────────────────────────────────────────────
 
 function Failed({ subject }: { subject: SubjectDetail }) {
-  const s = useStyles()
   const router = useRouter()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const retry = useMutation({
@@ -98,17 +132,19 @@ function Failed({ subject }: { subject: SubjectDetail }) {
     onSuccess: () => { invalidateStudy(); router.replace('/') },
   })
   return (
-    <Screen back scroll={false} footer={
-      <>
-        <Button label="Tentar de novo" onPress={() => retry.mutate()} loading={retry.isPending} />
-        <Button label="Excluir tema" variant="ghostDanger" onPress={() => setConfirmDelete(true)} />
-      </>
-    }>
-      <View style={s.center}>
-        <SubjectIcon icon={subject.icon} color={subject.color} size={72} />
-        <Text style={s.bigTitle}>Não conseguimos montar a trilha</Text>
-        <Text style={s.centerText}>{subject.failureReason ?? 'Algo deu errado do nosso lado. Tente de novo.'}</Text>
-      </View>
+    <Screen
+      back
+      footer={
+        <>
+          <Button label="Tentar de novo" onPress={() => retry.mutate()} loading={retry.isPending} />
+          <Button label="Excluir tema" variant="ghost" onPress={() => setConfirmDelete(true)} />
+        </>
+      }
+    >
+      <SubjectHero subject={subject} eyebrow="Não deu certo" />
+      <Text variant="reading" tone="secondary" style={{ marginTop: SPACE.xl }}>
+        {subject.failureReason ?? 'Não conseguimos montar a trilha. Foi um problema do nosso lado; tente de novo.'}
+      </Text>
       <ConfirmSheet
         visible={confirmDelete}
         title="Excluir este tema?"
@@ -127,7 +163,6 @@ function Failed({ subject }: { subject: SubjectDetail }) {
 
 function Review({ subject }: { subject: SubjectDetail }) {
   const s = useStyles()
-  const c = useColors()
   const router = useRouter()
   const { profile } = useAuth()
   const [adjustOpen, setAdjustOpen] = useState(false)
@@ -148,7 +183,7 @@ function Review({ subject }: { subject: SubjectDetail }) {
     onSuccess: (data) => {
       track('path_approved', { modules: modules.length, lessons })
       setSubject(data)
-      toast.success('Trilha pronta! Sua primeira aula está em Hoje.')
+      toast.success('Trilha pronta. A primeira aula está em Hoje.')
       router.replace('/')
     },
     onError: (e) => Alert.alert('Não deu certo', errorMessage(e)),
@@ -176,54 +211,48 @@ function Review({ subject }: { subject: SubjectDetail }) {
         </>
       }
     >
-      <View style={s.hero}>
-        <SubjectIcon icon={subject.icon} color={subject.color} size={56} />
-        <Text style={s.eyebrow}>Sua trilha está pronta</Text>
-        <Text style={s.heroTitle}>{subject.title}</Text>
-      </View>
-      {subject.failureReason ? (
-        <View style={s.warn}>
-          <Warning size={18} color={c.yellow} weight="fill" />
-          <Text style={s.warnText}>{subject.failureReason}</Text>
-        </View>
-      ) : null}
+      <SubjectHero subject={subject} eyebrow="Sua trilha está pronta" />
+      {subject.goal ? <Text variant="reading" tone="secondary" style={{ marginTop: SPACE.xl }}>{subject.goal}</Text> : null}
+      {subject.failureReason ? <View style={{ marginTop: SPACE.lg }}><Notice>{subject.failureReason}</Notice></View> : null}
+
       <View style={s.stats}>
         <Stat value={String(modules.length)} label="módulos" />
         <Stat value={String(lessons)} label="aulas" />
         <Stat value={formatHours(total)} label="de estudo" />
       </View>
+
       {subject.endDate ? (
-        <Card style={s.endCard}>
-          <CalendarBlank size={20} color={c.primary} weight="bold" />
-          <Text style={s.endText}>
-            No seu ritmo, você termina em <Text style={s.bold}>{formatDate(subject.endDate)}</Text>.
-            {subject.availability ? ` ${formatDays(subject.availability.daysOfWeek)}, ${subject.availability.dailyMinutes} min por dia.` : ''}
-          </Text>
-        </Card>
+        <ListGroup style={{ marginTop: SPACE.md }}>
+          <ListRow
+            leading={<CalendarBlankIcon />}
+            title={`Termina em ${formatDate(subject.endDate)}`}
+            subtitle={subject.availability ? `${formatDays(subject.availability.daysOfWeek)}, ${subject.availability.dailyMinutes} min por dia` : null}
+          />
+        </ListGroup>
       ) : null}
       {!subject.fitsDeadline && subject.deadline ? (
-        <View style={s.warn}>
-          <Warning size={18} color={c.yellow} weight="fill" />
-          <Text style={s.warnText}>Passa do seu prazo ({formatDate(subject.deadline)}). Peça um ajuste ou aumente o tempo por dia.</Text>
+        <View style={{ marginTop: SPACE.md }}>
+          <Notice>{`Passa do seu prazo (${formatDate(subject.deadline)}). Peça um ajuste ou aumente o tempo por dia.`}</Notice>
         </View>
       ) : null}
-      <Text style={s.section}>Do básico ao avançado</Text>
-      <ModuleList modules={modules} />
-      {subject.disclaimer ? <Text style={s.disclaimer}>{subject.disclaimer}</Text> : null}
 
-      <BottomSheet visible={adjustOpen} onClose={() => setAdjustOpen(false)} title="O que mudar na trilha?" avoidKeyboard>
+      <SectionHeader title="Do básico ao avançado" description="Cada módulo se apoia no anterior." />
+      <ModuleList modules={modules} />
+      {subject.disclaimer ? <Text variant="caption" tone="tertiary" style={{ marginTop: SPACE.xl }}>{subject.disclaimer}</Text> : null}
+
+      <Sheet visible={adjustOpen} onClose={() => setAdjustOpen(false)} title="O que mudar na trilha?" avoidKeyboard>
         <View style={{ paddingHorizontal: GUTTER }}>
-          <TextField
+          <Composer
             value={adjustText}
             onChangeText={setAdjustText}
-            placeholder="Ex.: menos Império e mais República; incluir exercícios de redação"
-            multiline
-            maxLength={600}
+            placeholder="Ex.: menos Império e mais República"
+            onSubmit={() => adjust.mutate()}
+            loading={adjust.isPending}
+            minHeight={96}
             autoFocus
           />
-          <Button label="Refazer trilha" onPress={() => adjust.mutate()} loading={adjust.isPending} disabled={adjustText.trim().length < 3} />
         </View>
-      </BottomSheet>
+      </Sheet>
     </Screen>
   )
 }
@@ -232,8 +261,8 @@ function Stat({ value, label }: { value: string; label: string }) {
   const s = useStyles()
   return (
     <View style={s.stat}>
-      <Text style={s.statValue}>{value}</Text>
-      <Text style={s.statLabel}>{label}</Text>
+      <Text variant="heading">{value}</Text>
+      <Text variant="caption" tone="secondary">{label}</Text>
     </View>
   )
 }
@@ -241,13 +270,13 @@ function Stat({ value, label }: { value: string; label: string }) {
 // ─── Tema ativo ────────────────────────────────────────────────────────────
 
 function Detail({ subject, refreshing, onRefresh }: { subject: SubjectDetail; refreshing: boolean; onRefresh: () => void }) {
-  const s = useStyles()
   const c = useColors()
   const router = useRouter()
   const [confirm, setConfirm] = useState<'archive' | 'delete' | null>(null)
   const today = toISODate(new Date())
   const paused = subject.status === 'paused'
   const completed = subject.status === 'completed'
+  const { progress } = subject
 
   const toggle = useMutation({
     mutationFn: () => api.updateSubject(subject.id, { status: paused ? 'active' : 'paused' }),
@@ -274,123 +303,103 @@ function Detail({ subject, refreshing, onRefresh }: { subject: SubjectDetail; re
     },
   })
 
-  return (
-    <Screen back refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
-      <View style={s.hero}>
-        <SubjectIcon icon={subject.icon} color={subject.color} size={56} />
-        <Text style={s.heroTitle}>{subject.title}</Text>
-        {paused ? <Text style={s.badge}>Pausado</Text> : completed ? <Text style={[s.badge, s.badgeDone]}>Concluído</Text> : null}
-      </View>
+  const next = subject.nextLesson
+  const nextIsToday = subject.nextSessionDate === today
 
-      <Card>
-        <View style={s.progressRow}>
-          <Text style={s.progressPercent}>{subject.progress.percent}%</Text>
-          <Text style={s.progressMeta}>
-            {subject.progress.completed} de {subject.progress.total} aulas · {formatMinutes(subject.progress.minutesDone)} de {formatHours(subject.progress.minutesTotal)}
+  return (
+    <Screen back refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.text} />}>
+      <SubjectHero subject={subject} eyebrow={paused ? 'Pausado' : completed ? 'Concluído' : null} />
+      {subject.goal ? <Text variant="reading" tone="secondary" style={{ marginTop: SPACE.xl }}>{subject.goal}</Text> : null}
+
+      <Card style={{ marginTop: SPACE.xl, gap: SPACE.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <Text variant="title">{progress.percent}%</Text>
+          <Text variant="caption" tone="secondary">
+            {progress.completed} de {progress.total} aulas · {formatMinutes(progress.minutesDone)} de {formatHours(progress.minutesTotal)}
           </Text>
         </View>
-        <ProgressBar percent={subject.progress.percent} />
-        {subject.endDate && !completed ? (
-          <Text style={s.progressEnd}>Termina em {formatDate(subject.endDate)}</Text>
-        ) : null}
-        {!subject.fitsDeadline && subject.deadline && !completed ? (
-          <View style={[s.warn, { marginTop: 12, marginBottom: 0 }]}>
-            <Warning size={18} color={c.yellow} weight="fill" />
-            <Text style={s.warnText}>No ritmo atual, passa do prazo ({formatDate(subject.deadline)}). Aumente o tempo por dia para recuperar.</Text>
-          </View>
-        ) : null}
+        <ProgressBar percent={progress.percent} />
+        {subject.endDate && !completed ? <Text variant="caption" tone="secondary">Termina em {formatDate(subject.endDate)}</Text> : null}
       </Card>
-
-      {subject.nextLesson && !paused && !completed ? (
-        <Card style={{ marginTop: 12 }}>
-          <Text style={s.cardLabel}>Próxima aula</Text>
-          <Text style={s.cardTitle}>{subject.nextLesson.title}</Text>
-          {subject.nextSessionDate === today ? (
-            <Button label="Ir para a aula de hoje" onPress={() => router.replace('/')} style={{ marginTop: 14 }} />
-          ) : (
-            <>
-              {subject.nextSessionDate ? <Text style={s.cardMeta}>Marcada para {relativeDay(subject.nextSessionDate, today)}</Text> : null}
-              <Button label="Adiantar agora" variant="secondary" onPress={() => extra.mutate()} loading={extra.isPending} style={{ marginTop: 14 }} />
-            </>
-          )}
-        </Card>
+      {!subject.fitsDeadline && subject.deadline && !completed ? (
+        <View style={{ marginTop: SPACE.md }}>
+          <Notice>{`No ritmo atual, passa do prazo (${formatDate(subject.deadline)}). Aumente o tempo por dia para recuperar.`}</Notice>
+        </View>
       ) : null}
+
+      <SectionHeader title="Aprender" />
+      <View style={{ gap: SPACE.sm }}>
+        {next && !paused && !completed ? (
+          <ListRow
+            variant="outline"
+            leading={<PlayCircleIcon />}
+            title={next.title}
+            subtitle={nextIsToday ? 'Na sessão de hoje' : subject.nextSessionDate ? `Marcada para ${relativeDay(subject.nextSessionDate, today)}. Toque para adiantar.` : 'Próxima aula'}
+            trailing={extra.isPending ? <ActivityIndicator color={c.text} /> : <Tag label={nextIsToday ? 'Hoje' : 'Adiantar'} variant={nextIsToday ? 'solid' : 'outline'} />}
+            onPress={() => (nextIsToday ? router.replace('/') : extra.mutate())}
+          />
+        ) : null}
+        <ListRow
+          variant="outline"
+          leading={<FilmStripIcon />}
+          title="Biblioteca do tema"
+          subtitle="Vídeos, podcasts, imagens e leituras das aulas"
+          chevron
+          onPress={() => router.push({ pathname: '/tema/[id]/biblioteca', params: { id: subject.id } })}
+        />
+      </View>
 
       {subject.upcoming.length > 0 && !paused ? (
         <>
-          <Text style={s.section}>Próximas sessões</Text>
-          <Card>
-            {subject.upcoming.slice(0, 5).map((x, i) => (
-              <View key={`${x.date}-${x.slot}`} style={[s.upcoming, i > 0 && s.upcomingBorder]}>
-                <Text style={s.upcomingDay}>{relativeDay(x.date, today)}</Text>
-                <View style={{ flex: 1 }}>
-                  {x.lessons.map((l) => <Text key={l.id} style={s.upcomingLesson} numberOfLines={2}>{l.title}</Text>)}
-                </View>
-                <Text style={s.upcomingMin}>{x.lessons.reduce((n, l) => n + l.minutes, 0)} min</Text>
-              </View>
+          <SectionHeader title="Próximas sessões" />
+          <ListGroup inset={16}>
+            {subject.upcoming.slice(0, 5).map((x) => (
+              <ListRow
+                key={`${x.date}-${x.slot}`}
+                title={x.lessons.map((l) => l.title).join(' · ')}
+                subtitle={`${x.lessons.reduce((n, l) => n + l.minutes, 0)} min`}
+                value={relativeDay(x.date, today)}
+              />
             ))}
-          </Card>
+          </ListGroup>
         </>
       ) : null}
 
-      <Card style={[s.libraryCard, { marginTop: 28 }]} onPress={() => router.push({ pathname: '/tema/[id]/biblioteca', params: { id: subject.id } })}>
-        <FilmStripIcon size={24} color={c.primary} weight="bold" />
-        <View style={{ flex: 1 }}>
-          <Text style={s.availText}>Biblioteca do tema</Text>
-          <Text style={s.availMeta}>Vídeos, podcasts, imagens e leituras das aulas</Text>
-        </View>
-        <CaretRightIcon size={18} color={c.gray500} weight="bold" />
-      </Card>
-
-      <Text style={s.section}>Trilha</Text>
+      <SectionHeader title="Trilha" />
       <ModuleList
         modules={subject.path?.modules ?? []}
         showProgress
         onLessonPress={(lessonId) => router.push({ pathname: '/aula/[id]', params: { id: lessonId } })}
       />
 
-      {subject.availability ? (
-        <>
-          <Text style={s.section}>Sua disponibilidade</Text>
-          <Card onPress={() => router.push({ pathname: '/tema/[id]/disponibilidade', params: { id: subject.id } })}>
-            <View style={s.availRow}>
-              <Clock size={20} color={c.gray700} weight="bold" />
-              <View style={{ flex: 1 }}>
-                <Text style={s.availText}>
-                  {formatDays(subject.availability.daysOfWeek)}, {subject.availability.dailyMinutes} min por dia
-                  {subject.availability.sessionsPerDay > 1 ? ` em ${subject.availability.sessionsPerDay} sessões` : ''}
-                </Text>
-                <Text style={s.availMeta}>
-                  {subject.availability.deadline ? `Prazo: ${formatDate(subject.availability.deadline)}` : 'Sem prazo'}
-                  {subject.availability.reminderTime ? ` · Lembrete às ${subject.availability.reminderTime}` : ''}
-                </Text>
-              </View>
-              <PencilSimple size={20} color={c.primary} weight="bold" />
-            </View>
-          </Card>
-        </>
-      ) : null}
-
-      {subject.disclaimer ? <Text style={s.disclaimer}>{subject.disclaimer}</Text> : null}
-
-      <View style={s.actions}>
-        {!completed ? (
-          <Button
-            label={paused ? 'Retomar tema' : 'Pausar tema'}
-            variant="secondary"
-            icon={paused ? <Play size={18} weight="bold" /> : <Pause size={18} weight="bold" />}
-            onPress={() => toggle.mutate()}
-            loading={toggle.isPending}
+      <SectionHeader title="Ajustes" />
+      <ListGroup>
+        {subject.availability ? (
+          <ListRow
+            leading={<ClockIcon />}
+            title="Disponibilidade"
+            subtitle={`${formatDays(subject.availability.daysOfWeek)}, ${subject.availability.dailyMinutes} min por dia${subject.availability.reminderTime ? ` · lembrete às ${subject.availability.reminderTime}` : ''}`}
+            chevron
+            onPress={() => router.push({ pathname: '/tema/[id]/disponibilidade', params: { id: subject.id } })}
           />
         ) : null}
-        <Button label="Arquivar" variant="ghost" icon={<Archive size={18} color={c.gray900} weight="bold" />} onPress={() => setConfirm('archive')} />
-        <Button label="Excluir tema" variant="ghostDanger" icon={<Trash size={18} color={c.red} weight="bold" />} onPress={() => setConfirm('delete')} />
-      </View>
+        {!completed ? (
+          <ListRow
+            leading={paused ? <PlayIcon /> : <PauseIcon />}
+            title={paused ? 'Retomar tema' : 'Pausar tema'}
+            trailing={toggle.isPending ? <ActivityIndicator color={c.text} /> : null}
+            onPress={() => toggle.mutate()}
+          />
+        ) : null}
+        <ListRow leading={<ArchiveIcon />} title="Arquivar" onPress={() => setConfirm('archive')} />
+        <ListRow leading={<TrashIcon />} title="Excluir tema" destructive onPress={() => setConfirm('delete')} />
+      </ListGroup>
+      {subject.disclaimer ? <Text variant="caption" tone="tertiary" style={{ marginTop: SPACE.xl }}>{subject.disclaimer}</Text> : null}
 
       <ConfirmSheet
         visible={confirm === 'archive'}
         title="Arquivar este tema?"
-        message="Ele sai de Hoje e da lista de temas, e libera espaço para um tema novo. O progresso fica guardado."
+        message="Ele sai de Hoje e da lista de temas e libera espaço para um tema novo. O progresso fica guardado."
         confirmLabel="Arquivar"
         loading={archive.isPending}
         onConfirm={() => archive.mutate()}
@@ -411,57 +420,11 @@ function Detail({ subject, refreshing, onRefresh }: { subject: SubjectDetail; re
 }
 
 const useStyles = makeThemedStyles((c) => ({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  bigTitle: { fontFamily: FONTS.extraBold, fontSize: 24, color: c.gray900, textAlign: 'center', marginTop: 20 },
-  centerText: { fontFamily: FONTS.regular, fontSize: 16, color: c.gray600, textAlign: 'center', marginTop: 8, lineHeight: 23 },
-  step: { fontFamily: FONTS.medium, fontSize: 15, color: c.gray600, marginTop: 6 },
-  note: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, textAlign: 'center', marginTop: 28, lineHeight: 19 },
-
-  hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 20 },
-  eyebrow: { fontFamily: FONTS.semiBold, fontSize: 13, color: c.primary, marginTop: 14, textTransform: 'uppercase', letterSpacing: 0.6 },
-  heroTitle: { fontFamily: FONTS.extraBold, fontSize: 26, color: c.gray900, textAlign: 'center', marginTop: 6, lineHeight: 32 },
-  badge: {
-    fontFamily: FONTS.bold, fontSize: 12, color: c.gray700, backgroundColor: c.gray100,
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginTop: 8, overflow: 'hidden',
+  hero: { flexDirection: 'row', alignItems: 'center', gap: SPACE.lg, paddingTop: SPACE.lg },
+  notice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.md,
+    backgroundColor: c.warningSoft, borderRadius: RADIUS.lg, padding: SPACE.lg,
   },
-  badgeDone: { color: c.green, backgroundColor: c.greenLight },
-
-  stats: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  stat: { flex: 1, backgroundColor: c.white, borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: c.gray100 },
-  statValue: { fontFamily: FONTS.extraBold, fontSize: 22, color: c.gray900 },
-  statLabel: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: 2 },
-  endCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  endText: { flex: 1, fontFamily: FONTS.regular, fontSize: 15, color: c.gray700, lineHeight: 21 },
-  bold: { fontFamily: FONTS.bold, color: c.gray900 },
-
-  warn: {
-    flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: c.yellowLight,
-    borderRadius: 14, padding: 12, marginBottom: 12,
-  },
-  warnText: { flex: 1, fontFamily: FONTS.medium, fontSize: 14, color: c.gray700, lineHeight: 20 },
-
-  section: { fontFamily: FONTS.bold, fontSize: 18, color: c.gray900, marginTop: 28, marginBottom: 12 },
-  disclaimer: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: 20, lineHeight: 19, textAlign: 'center' },
-
-  progressRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10 },
-  progressPercent: { fontFamily: FONTS.extraBold, fontSize: 28, color: c.gray900 },
-  progressMeta: { flex: 1, fontFamily: FONTS.regular, fontSize: 14, color: c.gray600 },
-  progressEnd: { fontFamily: FONTS.medium, fontSize: 14, color: c.gray600, marginTop: 10 },
-
-  cardLabel: { fontFamily: FONTS.semiBold, fontSize: 13, color: c.gray500, textTransform: 'uppercase', letterSpacing: 0.5 },
-  cardTitle: { fontFamily: FONTS.bold, fontSize: 18, color: c.gray900, marginTop: 6, lineHeight: 24 },
-  cardMeta: { fontFamily: FONTS.regular, fontSize: 14, color: c.gray600, marginTop: 4 },
-
-  upcoming: { flexDirection: 'row', gap: 12, paddingVertical: 10, alignItems: 'flex-start' },
-  upcomingBorder: { borderTopWidth: 1, borderTopColor: c.gray100 },
-  upcomingDay: { width: 72, fontFamily: FONTS.bold, fontSize: 14, color: c.gray900, textTransform: 'capitalize' },
-  upcomingLesson: { fontFamily: FONTS.regular, fontSize: 14, color: c.gray700, lineHeight: 20 },
-  upcomingMin: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500 },
-
-  availRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  libraryCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  availText: { fontFamily: FONTS.semiBold, fontSize: 15, color: c.gray900 },
-  availMeta: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: 2 },
-
-  actions: { marginTop: 28, gap: 4 },
+  stats: { flexDirection: 'row', gap: SPACE.sm, marginTop: SPACE.xl },
+  stat: { flex: 1, backgroundColor: c.surfaceMuted, borderRadius: RADIUS.lg, paddingVertical: SPACE.lg, alignItems: 'center', gap: 2 },
 }))

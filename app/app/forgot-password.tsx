@@ -2,17 +2,15 @@
 import { useState } from 'react'
 import { Alert } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Text } from '@/components/Text'
-import { Screen } from '@/components/Screen'
-import { TextField } from '@/components/Field'
-import { Button } from '@/components/Button'
+import { Screen } from '@/components/ui/Screen'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { TextField } from '@/components/ui/TextField'
+import { Button } from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authError'
-import { FONTS } from '@/lib/constants'
-import { makeThemedStyles } from '@/lib/theme'
+import { SPACE } from '@/lib/constants'
 
 export default function ForgotPassword() {
-  const s = useStyles()
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,16 +31,10 @@ export default function ForgotPassword() {
   }
 
   return (
-    <Screen back surface="white">
-      <Text style={s.title}>Esqueceu a senha?</Text>
-      <Text style={s.subtitle}>Digite seu e-mail e mandamos um código para criar uma senha nova.</Text>
-      <TextField label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
-      <Button label="Enviar código" onPress={submit} loading={loading} disabled={!email.trim()} style={{ marginTop: 8 }} />
+    <Screen back>
+      <PageHeader title="Esqueceu a senha?" subtitle="Digite seu e-mail e mandamos um código para criar uma senha nova." />
+      <TextField label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" autoFocus />
+      <Button label="Enviar código" onPress={submit} loading={loading} disabled={!email.trim()} style={{ marginTop: SPACE.sm }} />
     </Screen>
   )
 }
-
-const useStyles = makeThemedStyles((c) => ({
-  title: { fontFamily: FONTS.extraBold, fontSize: 30, color: c.gray900, marginBottom: 6 },
-  subtitle: { fontFamily: FONTS.medium, fontSize: 16, color: c.gray500, lineHeight: 22, marginBottom: 28 },
-}))

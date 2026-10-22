@@ -1,27 +1,18 @@
-// components/WheelPicker.tsx — roda de seleção estilo iOS, sem dependência nativa.
-import {
-  useRef, useState, useEffect } from 'react'
-import {
-  View, ScrollView, NativeSyntheticEvent, NativeScrollEvent,
-} from 'react-native'
-import { Text } from '@/components/Text'
-import { FONTS } from '@/lib/constants'
+// components/ui/WheelPicker.tsx — roda de seleção estilo iOS, sem dependência nativa.
+import { useEffect, useRef, useState } from 'react'
+import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import { Text } from '@/components/ui/Text'
+import { RADIUS } from '@/lib/constants'
 import { makeThemedStyles } from '@/lib/theme'
 
 export const ITEM_H = 44
 const VISIBLE = 5
 const PAD = ITEM_H * Math.floor(VISIBLE / 2)
 
-export function WheelPicker<T extends string | number>({
-  items,
-  value,
-  onChange,
-  showBand = true,
-}: {
+export function WheelPicker<T extends string | number>({ items, value, onChange }: {
   items: { label: string; value: T }[]
   value: T
   onChange: (v: T) => void
-  showBand?: boolean
 }) {
   const s = useStyles()
   const ref = useRef<ScrollView>(null)
@@ -47,11 +38,9 @@ export function WheelPicker<T extends string | number>({
 
   return (
     <View style={{ height: ITEM_H * VISIBLE }}>
-      {showBand && <View pointerEvents="none" style={[s.band, { top: PAD }]} />}
-      {/* `nestedScrollEnabled`: a roda pode morar DENTRO de outra rolagem
-          vertical (o sheet do início do mês rola em tela pequena). Sem ele, no
-          Android a rolagem de fora fica com o gesto e a roda não gira. No iOS
-          e fora de rolagem, não muda nada. */}
+      <View pointerEvents="none" style={[s.band, { top: PAD }]} />
+      {/* `nestedScrollEnabled`: a roda pode estar dentro de outra rolagem; sem
+          ele, no Android a rolagem de fora fica com o gesto. */}
       <ScrollView
         ref={ref}
         nestedScrollEnabled
@@ -65,7 +54,12 @@ export function WheelPicker<T extends string | number>({
       >
         {items.map((it, i) => (
           <View key={String(it.value)} style={s.item}>
-            <Text style={[s.text, i === center ? s.textActive : s.textDim]} numberOfLines={1}>
+            <Text
+              variant={i === center ? 'heading' : 'subheading'}
+              tone={i === center ? 'primary' : 'tertiary'}
+              align="center"
+              numberOfLines={1}
+            >
               {it.label}
             </Text>
           </View>
@@ -76,12 +70,6 @@ export function WheelPicker<T extends string | number>({
 }
 
 const useStyles = makeThemedStyles((c) => ({
-  band: {
-    position: 'absolute', left: 0, right: 0, height: ITEM_H,
-    backgroundColor: c.gray100, borderRadius: 12,
-  },
+  band: { position: 'absolute', left: 0, right: 0, height: ITEM_H, backgroundColor: c.surfaceMuted, borderRadius: RADIUS.md },
   item: { height: ITEM_H, justifyContent: 'center', alignItems: 'center' },
-  text: { textAlign: 'center' },
-  textActive: { fontFamily: FONTS.bold, fontSize: 22, color: c.gray900 },
-  textDim: { fontFamily: FONTS.medium, fontSize: 17, color: c.gray500 },
 }))

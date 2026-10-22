@@ -1,21 +1,21 @@
 // app/signup.tsx — criar conta com e-mail e senha (ou Google/Apple).
 import { useState } from 'react'
-import { Alert, Linking, TouchableOpacity, View } from 'react-native'
+import { Alert, Linking, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Text } from '@/components/Text'
-import { Screen } from '@/components/Screen'
-import { TextField } from '@/components/Field'
-import { Button } from '@/components/Button'
+import { Text } from '@/components/ui/Text'
+import { Screen } from '@/components/ui/Screen'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { TextField } from '@/components/ui/TextField'
+import { Button } from '@/components/ui/Button'
+import { LabeledDivider } from '@/components/ui/Divider'
 import { GoogleButton } from '@/components/GoogleButton'
 import { AppleButton } from '@/components/AppleButton'
 import { supabase } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authError'
 import { track } from '@/lib/analytics'
-import { FONTS, SITE_URL } from '@/lib/constants'
-import { makeThemedStyles } from '@/lib/theme'
+import { SITE_URL, SPACE } from '@/lib/constants'
 
 export default function SignUp() {
-  const s = useStyles()
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -43,40 +43,25 @@ export default function SignUp() {
   }
 
   return (
-    <Screen back surface="white">
-      <Text style={s.title}>Criar conta</Text>
-      <Text style={s.subtitle}>Leva um minuto. Depois, a gente monta sua primeira trilha.</Text>
+    <Screen back>
+      <PageHeader title="Criar conta" subtitle="Leva um minuto. Depois a gente monta a sua primeira trilha." />
       <TextField label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
       <TextField label="Senha" value={password} onChangeText={setPassword} placeholder="Pelo menos 6 caracteres" secureTextEntry autoCapitalize="none" autoComplete="password-new" />
-      <Button label="Criar conta" onPress={submit} loading={loading} disabled={!email.trim() || !password} style={{ marginTop: 8 }} />
-      <View style={s.divider}><View style={s.line} /><Text style={s.or}>ou</Text><View style={s.line} /></View>
-      <View style={{ gap: 10 }}>
+      <Button label="Criar conta" onPress={submit} loading={loading} disabled={!email.trim() || !password} style={{ marginTop: SPACE.sm }} />
+      <LabeledDivider label="ou" />
+      <View style={{ gap: SPACE.sm }}>
         <GoogleButton />
         <AppleButton />
       </View>
-      <TouchableOpacity style={s.switch} onPress={() => router.replace('/signin')}>
-        <Text style={s.switchText}>Já tem conta? <Text style={s.link}>Entrar</Text></Text>
-      </TouchableOpacity>
+      <Button label="Já tem conta? Entrar" variant="ghost" size="md" onPress={() => router.replace('/signin')} style={{ marginTop: SPACE.xl }} />
       {SITE_URL ? (
-        <Text style={s.legal}>
+        <Text variant="caption" tone="tertiary" align="center" style={{ marginTop: SPACE.lg }}>
           Ao continuar, você concorda com os{' '}
-          <Text style={s.legalLink} onPress={() => Linking.openURL(`${SITE_URL}/termos`)}>Termos de uso</Text> e a{' '}
-          <Text style={s.legalLink} onPress={() => Linking.openURL(`${SITE_URL}/privacidade`)}>Política de privacidade</Text>.
+          <Text variant="caption" tone="secondary" style={{ textDecorationLine: 'underline' }} onPress={() => Linking.openURL(`${SITE_URL}/termos`)}>Termos de uso</Text>
+          {' '}e a{' '}
+          <Text variant="caption" tone="secondary" style={{ textDecorationLine: 'underline' }} onPress={() => Linking.openURL(`${SITE_URL}/privacidade`)}>Política de privacidade</Text>.
         </Text>
       ) : null}
     </Screen>
   )
 }
-
-const useStyles = makeThemedStyles((c) => ({
-  title: { fontFamily: FONTS.extraBold, fontSize: 30, color: c.gray900, marginBottom: 6 },
-  subtitle: { fontFamily: FONTS.medium, fontSize: 16, color: c.gray500, lineHeight: 22, marginBottom: 28 },
-  link: { fontFamily: FONTS.bold, fontSize: 14, color: c.primary },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 20 },
-  line: { flex: 1, height: 1, backgroundColor: c.gray200 },
-  or: { fontFamily: FONTS.medium, fontSize: 13, color: c.gray500 },
-  switch: { alignItems: 'center', marginTop: 24 },
-  switchText: { fontFamily: FONTS.regular, fontSize: 14, color: c.gray500 },
-  legal: { fontFamily: FONTS.regular, fontSize: 12, color: c.gray500, textAlign: 'center', lineHeight: 18, marginTop: 28 },
-  legalLink: { fontFamily: FONTS.semiBold, color: c.primary },
-}))

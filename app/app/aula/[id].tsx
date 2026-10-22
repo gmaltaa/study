@@ -1,37 +1,35 @@
 // app/aula/[id].tsx — a aula: ler o conteúdo, fazer os exercícios (com a
 // explicação de cada resposta) e concluir. `?sessionId=` liga a aula à sessão
 // de hoje: concluir a última aula da sessão fecha a sessão.
-import { useEffect, useRef, useState } from 'react'
-import { Alert, ScrollView, TouchableOpacity, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, Alert, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ActivityIndicator } from 'react-native'
-import { Fire, Flag, X } from 'phosphor-react-native'
-import { Text } from '@/components/Text'
-import { Button } from '@/components/Button'
-import { Chip } from '@/components/Chip'
-import { TextField } from '@/components/Field'
-import { BottomSheet } from '@/components/BottomSheet'
-import { Confetti } from '@/components/Confetti'
+import { FireIcon, FlagIcon } from 'phosphor-react-native'
+import { Text } from '@/components/ui/Text'
+import { Screen } from '@/components/ui/Screen'
+import { Button } from '@/components/ui/Button'
+import { ChipGroup } from '@/components/ui/Chip'
+import { TextField } from '@/components/ui/TextField'
+import { Sheet } from '@/components/ui/Sheet'
+import { Tag } from '@/components/ui/Tag'
+import { Confetti } from '@/components/ui/Confetti'
+import { StepProgress } from '@/components/ui/ProgressBar'
+import { ErrorView, LoadingView } from '@/components/ui/StateView'
 import { LessonBlocks } from '@/components/LessonBlocks'
-import { MediaBlock, MediaExtras } from '@/components/media/MediaBlock'
 import { ExerciseCard } from '@/components/ExerciseCard'
-import { ProgressBar } from '@/components/ProgressBar'
-import { ErrorView, LoadingView } from '@/components/StateView'
+import { MediaBlock, MediaExtras } from '@/components/media/MediaBlock'
 import { api, errorMessage } from '@/lib/api'
 import { invalidateStudy, keys } from '@/lib/query'
 import { track } from '@/lib/analytics'
 import { toast } from '@/lib/toast'
-import { FONTS, GUTTER } from '@/lib/constants'
-import { makeThemedStyles, useColors } from '@/lib/theme'
+import { GUTTER, SPACE } from '@/lib/constants'
+import { useColors } from '@/lib/theme'
 import type { CompleteResult, Lesson } from '@/lib/types'
 
 type Phase = 'read' | 'exercises' | 'done'
 
 export default function LessonScreen() {
-  const s = useStyles()
-  const c = useColors()
   const router = useRouter()
   const { id, sessionId } = useLocalSearchParams<{ id: string; sessionId?: string }>()
   const query = useQuery({
@@ -41,50 +39,42 @@ export default function LessonScreen() {
     refetchInterval: (q) => (q.state.data?.status === 'generating' ? 4000 : false),
     staleTime: Infinity,
   })
-
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'))
   const lesson = query.data
 
-  return (
-    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      <View style={s.top}>
-        <TouchableOpacity onPress={close} hitSlop={10}><X size={24} color={c.gray900} weight="bold" /></TouchableOpacity>
-        <Text style={s.topTitle} numberOfLines={1}>{lesson ? `${lesson.subject.icon} ${lesson.subject.title}` : ''}</Text>
-        <View style={{ width: 24 }} />
-      </View>
-      {query.isLoading ? (
-        <LoadingView />
-      ) : query.isError || !lesson ? (
-        <ErrorView message={errorMessage(query.error)} onRetry={() => query.refetch()} />
-      ) : lesson.status === 'generating' ? (
-        <Preparing lesson={lesson} />
-      ) : lesson.status === 'quota' ? (
+  if (query.isLoading) return <Screen close onBack={close} scroll={false}><LoadingView /></Screen>
+  if (query.isError || !lesson) {
+    return <Screen close onBack={close} scroll={false}><ErrorView message={errorMessage(query.error)} onRetry={() => query.refetch()} /></Screen>
+  }
+  if (lesson.status === 'generating') return <Preparing lesson={lesson} onClose={close} />
+  if (lesson.status === 'quota') {
+    return (
+      <Screen close onBack={close} title={lesson.subject.title} scroll={false}>
         <ErrorView message="Você atingiu o limite de aulas geradas hoje. Amanhã tem mais." />
-      ) : (
-        <Player lesson={lesson} sessionId={sessionId ?? null} />
-      )}
-    </SafeAreaView>
-  )
+      </Screen>
+    )
+  }
+  return <Player lesson={lesson} sessionId={sessionId ?? null} onClose={close} />
 }
 
-function Preparing({ lesson }: { lesson: Lesson }) {
-  const s = useStyles()
+function Preparing({ lesson, onClose }: { lesson: Lesson; onClose: () => void }) {
   const c = useColors()
   return (
-    <View style={s.center}>
-      <ActivityIndicator color={c.primary} size="large" />
-      <Text style={s.prepTitle}>Preparando sua aula</Text>
-      <Text style={s.prepText}>{lesson.title}</Text>
-      <Text style={s.prepNote}>Leva uns 30 segundos. A partir de agora, as próximas aulas já ficam prontas antes.</Text>
-    </View>
+    <Screen close onBack={onClose} title={lesson.subject.title} scroll={false}>
+      <View style={{ flex: 1, justifyContent: 'center', gap: SPACE.md }}>
+        <ActivityIndicator color={c.text} style={{ alignSelf: 'flex-start' }} />
+        <Text variant="eyebrow" tone="secondary">Preparando sua aula</Text>
+        <Text variant="title">{lesson.title}</Text>
+        <Text variant="body" tone="secondary">
+          Leva uns 30 segundos. Daqui para a frente, as próximas aulas ficam prontas antes.
+        </Text>
+      </View>
+    </Screen>
   )
 }
 
-function Player({ lesson, sessionId }: { lesson: Lesson; sessionId: string | null }) {
-  const s = useStyles()
-  const c = useColors()
+function Player({ lesson, sessionId, onClose }: { lesson: Lesson; sessionId: string | null; onClose: () => void }) {
   const router = useRouter()
-  const scroller = useRef<ScrollView>(null)
   const [phase, setPhase] = useState<Phase>('read')
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -93,15 +83,13 @@ function Player({ lesson, sessionId }: { lesson: Lesson; sessionId: string | nul
   const exercises = lesson.exercises
   const exercise = exercises[index]
   // Vídeo principal e imagens aparecem no meio do texto (blocos `media`); o
-  // resto vai para o "Para ir além".
-  // `?? []`: aula aberta contra um backend anterior a esta versão.
+  // resto vai para o "Para ir além". `?? []`: backend anterior a esta versão.
   const media = lesson.media ?? []
   const mediaByRef = new Map(media.filter((m) => m.ref).map((m) => [m.ref!, m]))
   const extras = media.filter((m) => m.role === 'extra')
   const video = media.find((m) => m.role === 'core')
 
   useEffect(() => { track('lesson_started', { minutes: lesson.minutes, review: lesson.completed }) }, [lesson.id])
-  useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }) }, [phase, index])
 
   const complete = useMutation({
     mutationFn: () => api.completeLesson(lesson.id, sessionId),
@@ -123,101 +111,123 @@ function Player({ lesson, sessionId }: { lesson: Lesson; sessionId: string | nul
     api.answer(exercise.id, optionId, sessionId).catch(() => {})
   }
 
-  const nextExercise = () => {
-    if (index < exercises.length - 1) setIndex(index + 1)
-    else complete.mutate()
-  }
-
   const goNext = () => {
     if (result?.nextInSession) {
       router.replace({ pathname: '/aula/[id]', params: { id: result.nextInSession, sessionId: sessionId ?? undefined } })
     } else {
-      router.canGoBack() ? router.back() : router.replace('/')
+      onClose()
     }
   }
 
+  const report = <ReportSheet visible={reportOpen} lessonId={lesson.id} exerciseId={phase === 'exercises' ? exercise?.id : null} onClose={() => setReportOpen(false)} />
+
   if (phase === 'done' && result) {
-    const perfect = result.total > 0 && result.correct === result.total
+    const title = result.subjectCompleted ? 'Trilha concluída.' : result.sessionCompleted ? 'Sessão concluída.' : 'Aula concluída.'
     return (
       <View style={{ flex: 1 }}>
+        <Screen
+          close
+          onBack={onClose}
+          scroll={false}
+          footer={
+            <>
+              <Button label={result.nextInSession ? 'Próxima aula' : 'Voltar'} onPress={goNext} />
+              <Button label="Reportar um erro nesta aula" variant="ghost" onPress={() => setReportOpen(true)} />
+            </>
+          }
+        >
+          <View style={{ flex: 1, justifyContent: 'center', gap: SPACE.md }}>
+            <Text variant="eyebrow" tone="secondary">{lesson.title}</Text>
+            <Text variant="display">{title}</Text>
+            {result.total > 0 ? (
+              <Text variant="reading" tone="secondary">
+                Você acertou {result.correct} de {result.total} {result.total === 1 ? 'questão' : 'questões'} de primeira.
+              </Text>
+            ) : null}
+            {result.streak.current > 0 ? (
+              <Tag
+                label={`${result.streak.current} ${result.streak.current === 1 ? 'dia' : 'dias'} de estudo seguidos`}
+                variant="accent"
+                icon={<FireIcon />}
+                style={{ marginTop: SPACE.sm }}
+              />
+            ) : null}
+          </View>
+        </Screen>
         {result.sessionCompleted || result.subjectCompleted ? <Confetti /> : null}
-        <View style={s.center}>
-          <Text style={s.doneEmoji}>{result.subjectCompleted ? '🏆' : perfect ? '🎯' : '✅'}</Text>
-          <Text style={s.doneTitle}>
-            {result.subjectCompleted ? 'Trilha concluída!' : result.sessionCompleted ? 'Sessão concluída!' : 'Aula concluída!'}
-          </Text>
-          {result.total > 0 ? (
-            <Text style={s.doneText}>Você acertou {result.correct} de {result.total} {result.total === 1 ? 'questão' : 'questões'} de primeira.</Text>
-          ) : null}
-          {result.streak.current > 0 ? (
-            <View style={s.streak}>
-              <Fire size={22} color={c.accent} weight="fill" />
-              <Text style={s.streakText}>{result.streak.current} {result.streak.current === 1 ? 'dia' : 'dias'} de estudo seguidos</Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={s.footer}>
-          <Button label={result.nextInSession ? 'Próxima aula' : 'Voltar'} onPress={goNext} />
-          <Button label="Reportar um erro nesta aula" variant="ghostMuted" onPress={() => setReportOpen(true)} />
-        </View>
-        <ReportSheet visible={reportOpen} lessonId={lesson.id} onClose={() => setReportOpen(false)} />
+        {report}
       </View>
     )
   }
 
-  return (
-    <View style={{ flex: 1 }}>
-      {phase === 'exercises' ? (
-        <View style={s.progress}>
-          <ProgressBar percent={((index + (answers[exercise?.id] ? 1 : 0)) / Math.max(1, exercises.length)) * 100} />
-          <Text style={s.progressText}>{index + 1} de {exercises.length}</Text>
+  if (phase === 'exercises' && exercise) {
+    const last = index === exercises.length - 1
+    return (
+      <Screen
+        key={`exercise-${index}`}
+        close
+        onBack={onClose}
+        title={`Questão ${index + 1} de ${exercises.length}`}
+        footer={
+          <Button
+            label={last ? 'Concluir aula' : 'Próxima questão'}
+            onPress={() => (last ? complete.mutate() : setIndex(index + 1))}
+            disabled={!answers[exercise.id]}
+            loading={complete.isPending}
+          />
+        }
+      >
+        <View style={{ paddingTop: SPACE.sm, marginBottom: SPACE.xxl }}>
+          <StepProgress total={exercises.length} current={index} />
         </View>
-      ) : null}
-      <ScrollView ref={scroller} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        {phase === 'read' ? (
-          <>
-            <Text style={s.module}>Módulo {lesson.module.position} · {lesson.module.title}</Text>
-            <Text style={s.title}>{lesson.title}</Text>
-            <Text style={s.meta}>
-              {lesson.minutes} min{video ? `, com vídeo de ${video.countsMinutes} min` : ''} · {exercises.length} exercícios
-            </Text>
-            <View style={{ height: 20 }} />
-            <LessonBlocks
-              blocks={lesson.blocks}
-              renderMedia={(ref) => {
-                const item = mediaByRef.get(ref)
-                return item ? <MediaBlock item={item} /> : null
-              }}
-            />
-            {lesson.disclaimer ? <Text style={s.disclaimer}>{lesson.disclaimer}</Text> : null}
-            <MediaExtras items={extras} />
-            <TouchableOpacity style={s.report} onPress={() => setReportOpen(true)}>
-              <Flag size={16} color={c.gray500} weight="bold" />
-              <Text style={s.reportText}>Encontrou um erro? Avise a gente</Text>
-            </TouchableOpacity>
-          </>
-        ) : exercise ? (
-          <ExerciseCard exercise={exercise} chosen={answers[exercise.id] ?? null} onChoose={choose} />
-        ) : null}
-      </ScrollView>
-      <View style={s.footer}>
-        {phase === 'read' ? (
-          <Button
-            label={exercises.length ? `Ir para os exercícios (${exercises.length})` : 'Concluir aula'}
-            onPress={() => (exercises.length ? setPhase('exercises') : complete.mutate())}
-            loading={complete.isPending}
-          />
-        ) : (
-          <Button
-            label={index < exercises.length - 1 ? 'Próxima questão' : 'Concluir aula'}
-            onPress={nextExercise}
-            disabled={!answers[exercise?.id]}
-            loading={complete.isPending}
-          />
-        )}
+        <ExerciseCard exercise={exercise} chosen={answers[exercise.id] ?? null} onChoose={choose} />
+        {report}
+      </Screen>
+    )
+  }
+
+  return (
+    <Screen
+      close
+      onBack={onClose}
+      title={lesson.subject.title}
+      footer={
+        <Button
+          label={exercises.length ? `Ir para os exercícios (${exercises.length})` : 'Concluir aula'}
+          onPress={() => (exercises.length ? setPhase('exercises') : complete.mutate())}
+          loading={complete.isPending}
+        />
+      }
+    >
+      <View style={{ gap: SPACE.md, paddingTop: SPACE.lg, marginBottom: SPACE.xxl }}>
+        <Text variant="eyebrow" tone="secondary">Módulo {lesson.module.position} · {lesson.module.title}</Text>
+        <Text variant="title" accessibilityRole="header">{lesson.title}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm }}>
+          <Tag label={`${lesson.minutes} min`} />
+          {video ? <Tag label={`vídeo de ${video.countsMinutes} min`} /> : null}
+          {exercises.length ? <Tag label={`${exercises.length} exercícios`} /> : null}
+          {lesson.completed ? <Tag label="Já feita" variant="success" /> : null}
+        </View>
       </View>
-      <ReportSheet visible={reportOpen} lessonId={lesson.id} exerciseId={phase === 'exercises' ? exercise?.id : null} onClose={() => setReportOpen(false)} />
-    </View>
+      <LessonBlocks
+        blocks={lesson.blocks}
+        renderMedia={(ref) => {
+          const item = mediaByRef.get(ref)
+          return item ? <MediaBlock item={item} /> : null
+        }}
+      />
+      {lesson.disclaimer ? <Text variant="caption" tone="tertiary" style={{ marginTop: SPACE.xl }}>{lesson.disclaimer}</Text> : null}
+      <MediaExtras items={extras} />
+      <Button
+        label="Encontrou um erro? Avise a gente"
+        variant="ghost"
+        size="sm"
+        icon={<FlagIcon />}
+        onPress={() => setReportOpen(true)}
+        style={{ marginTop: SPACE.xxl, alignSelf: 'center' }}
+      />
+      {report}
+    </Screen>
   )
 }
 
@@ -228,13 +238,15 @@ const REASONS = [
   { value: 'other', label: 'Outro' },
 ] as const
 
+type Reason = (typeof REASONS)[number]['value']
+
 function ReportSheet({ visible, lessonId, exerciseId, onClose }: {
   visible: boolean
   lessonId: string
   exerciseId?: string | null
   onClose: () => void
 }) {
-  const [reason, setReason] = useState<(typeof REASONS)[number]['value']>('wrong_fact')
+  const [reason, setReason] = useState<Reason>('wrong_fact')
   const [message, setMessage] = useState('')
   const send = useMutation({
     mutationFn: () => api.report({ lessonId, exerciseId: exerciseId ?? null, reason, message: message.trim() || null }),
@@ -242,44 +254,17 @@ function ReportSheet({ visible, lessonId, exerciseId, onClose }: {
       track('content_reported', { reason })
       setMessage('')
       onClose()
-      toast.success('Obrigado! Vamos revisar.')
+      toast.success('Obrigado. Vamos revisar.')
     },
     onError: (e) => Alert.alert('Não deu certo', errorMessage(e)),
   })
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Reportar um erro" avoidKeyboard>
-      <View style={{ paddingHorizontal: GUTTER, gap: 12 }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {REASONS.map((r) => <Chip key={r.value} label={r.label} selected={reason === r.value} onPress={() => setReason(r.value)} />)}
-        </View>
+    <Sheet visible={visible} onClose={onClose} title="Reportar um erro" avoidKeyboard>
+      <View style={{ paddingHorizontal: GUTTER, gap: SPACE.lg }}>
+        <ChipGroup options={[...REASONS]} value={reason} onChange={setReason} />
         <TextField value={message} onChangeText={setMessage} placeholder="O que está errado? (opcional)" multiline maxLength={1000} />
         <Button label="Enviar" onPress={() => send.mutate()} loading={send.isPending} />
       </View>
-    </BottomSheet>
+    </Sheet>
   )
 }
-
-const useStyles = makeThemedStyles((c) => ({
-  safe: { flex: 1, backgroundColor: c.white },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingVertical: 10 },
-  topTitle: { flex: 1, textAlign: 'center', fontFamily: FONTS.semiBold, fontSize: 15, color: c.gray600 },
-  progress: { paddingHorizontal: GUTTER, paddingBottom: 8, gap: 6 },
-  progressText: { fontFamily: FONTS.semiBold, fontSize: 13, color: c.gray500, textAlign: 'right' },
-  content: { paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 32 },
-  module: { fontFamily: FONTS.semiBold, fontSize: 13, color: c.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  title: { fontFamily: FONTS.extraBold, fontSize: 28, color: c.gray900, lineHeight: 34, marginTop: 8 },
-  meta: { fontFamily: FONTS.regular, fontSize: 14, color: c.gray500, marginTop: 8 },
-  disclaimer: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: 24, lineHeight: 19 },
-  report: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 24, alignSelf: 'center' },
-  reportText: { fontFamily: FONTS.medium, fontSize: 14, color: c.gray500 },
-  footer: { paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 8, gap: 4 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 },
-  prepTitle: { fontFamily: FONTS.extraBold, fontSize: 22, color: c.gray900, marginTop: 16 },
-  prepText: { fontFamily: FONTS.medium, fontSize: 16, color: c.gray700, textAlign: 'center' },
-  prepNote: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, textAlign: 'center', marginTop: 16, lineHeight: 19 },
-  doneEmoji: { fontSize: 64 },
-  doneTitle: { fontFamily: FONTS.extraBold, fontSize: 28, color: c.gray900, textAlign: 'center' },
-  doneText: { fontFamily: FONTS.regular, fontSize: 16, color: c.gray600, textAlign: 'center', lineHeight: 23 },
-  streak: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, backgroundColor: c.accentSoft, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
-  streakText: { fontFamily: FONTS.bold, fontSize: 15, color: c.gray900 },
-}))

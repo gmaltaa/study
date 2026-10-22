@@ -1,20 +1,19 @@
 // app/signin.tsx — entrar com e-mail e senha (ou Google/Apple).
 import { useState } from 'react'
-import { Alert, TouchableOpacity, View } from 'react-native'
+import { Alert, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Text } from '@/components/Text'
-import { Screen } from '@/components/Screen'
-import { TextField } from '@/components/Field'
-import { Button } from '@/components/Button'
+import { Screen } from '@/components/ui/Screen'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { TextField } from '@/components/ui/TextField'
+import { Button } from '@/components/ui/Button'
+import { LabeledDivider } from '@/components/ui/Divider'
 import { GoogleButton } from '@/components/GoogleButton'
 import { AppleButton } from '@/components/AppleButton'
 import { supabase } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authError'
-import { FONTS } from '@/lib/constants'
-import { makeThemedStyles } from '@/lib/theme'
+import { SPACE } from '@/lib/constants'
 
 export default function SignIn() {
-  const s = useStyles()
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -43,35 +42,18 @@ export default function SignIn() {
   }
 
   return (
-    <Screen back surface="white">
-      <Text style={s.title}>Entrar</Text>
-      <Text style={s.subtitle}>Que bom te ver de novo.</Text>
+    <Screen back>
+      <PageHeader title="Entrar" subtitle="Que bom te ver de novo." />
       <TextField label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
       <TextField label="Senha" value={password} onChangeText={setPassword} placeholder="Sua senha" secureTextEntry autoCapitalize="none" autoComplete="password" />
-      <TouchableOpacity style={s.forgot} onPress={() => router.push('/forgot-password')} hitSlop={8}>
-        <Text style={s.link}>Esqueci a senha</Text>
-      </TouchableOpacity>
-      <Button label="Entrar" onPress={submit} loading={loading} disabled={!email.trim() || !password} style={{ marginTop: 8 }} />
-      <View style={s.divider}><View style={s.line} /><Text style={s.or}>ou</Text><View style={s.line} /></View>
-      <View style={{ gap: 10 }}>
+      <Button label="Entrar" onPress={submit} loading={loading} disabled={!email.trim() || !password} style={{ marginTop: SPACE.sm }} />
+      <Button label="Esqueci a senha" variant="ghost" size="md" onPress={() => router.push('/forgot-password')} style={{ marginTop: SPACE.xs }} />
+      <LabeledDivider label="ou" />
+      <View style={{ gap: SPACE.sm }}>
         <GoogleButton label="Entrar com Google" />
         <AppleButton />
       </View>
-      <TouchableOpacity style={s.switch} onPress={() => router.replace('/signup')}>
-        <Text style={s.switchText}>Não tem conta? <Text style={s.link}>Criar conta</Text></Text>
-      </TouchableOpacity>
+      <Button label="Não tem conta? Criar conta" variant="ghost" size="md" onPress={() => router.replace('/signup')} style={{ marginTop: SPACE.xl }} />
     </Screen>
   )
 }
-
-const useStyles = makeThemedStyles((c) => ({
-  title: { fontFamily: FONTS.extraBold, fontSize: 30, color: c.gray900, marginBottom: 6 },
-  subtitle: { fontFamily: FONTS.medium, fontSize: 16, color: c.gray500, marginBottom: 28 },
-  forgot: { alignSelf: 'flex-end', marginTop: -4, marginBottom: 8 },
-  link: { fontFamily: FONTS.bold, fontSize: 14, color: c.primary },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 20 },
-  line: { flex: 1, height: 1, backgroundColor: c.gray200 },
-  or: { fontFamily: FONTS.medium, fontSize: 13, color: c.gray500 },
-  switch: { alignItems: 'center', marginTop: 24 },
-  switchText: { fontFamily: FONTS.regular, fontSize: 14, color: c.gray500 },
-}))
