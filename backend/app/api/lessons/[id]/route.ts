@@ -11,9 +11,12 @@ import { requestLessonContent } from '@/lib/lessons'
 import type { Block, StoredOption } from '@/lib/ai/schemas'
 
 export const GET = withAuth<{ id: string }>(async ({ supabase, userId, request, params }) => {
+  // `learning_paths` e `subjects` se ligam de dois jeitos: a trilha aponta para
+  // o tema (subject_id) e o tema aponta para a trilha ativa (active_path_id).
+  // O embed precisa dizer qual: aqui é o tema DONO da trilha.
   const { data, error } = await supabase
     .from('lessons')
-    .select('id, position, title, estimated_minutes, content_status, content, summary, modules(title, position), learning_paths(subject_id, subjects(id, title, icon, color, topic_profile))')
+    .select('id, position, title, estimated_minutes, content_status, content, summary, modules(title, position), learning_paths(subject_id, subjects!learning_paths_subject_id_fkey(id, title, icon, color, topic_profile))')
     .eq('id', params.id)
     .maybeSingle()
   if (error) throw error
