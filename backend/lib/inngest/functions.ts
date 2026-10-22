@@ -24,6 +24,18 @@ import { dayOfWeek, partsIn } from '@/lib/dates'
 import { assertDailyQuota } from '@/lib/limits'
 import { sendPushToUsers } from '@/lib/push'
 
+/**
+ * Teto de execuções simultâneas por função. O plano grátis do Inngest aceita
+ * no máximo 5, e um valor acima disso impede o app de sincronizar. Subir aqui
+ * quando o plano mudar.
+ *
+ * O Inngest conta PASSOS, não execuções: os módulos de uma trilha rodam em
+ * paralelo, e cada um ocupa uma vaga. Por isso a geração da trilha não tem
+ * limite por usuário (seria um módulo de cada vez); quem segura o abuso é a
+ * cota diária e o limite de temas ativos.
+ */
+const PLAN_CONCURRENCY = 5
+
 interface PathEventData { userId: string; subjectId: string; pathId: string }
 interface LessonEventData { userId: string; lessonId: string }
 
@@ -107,7 +119,7 @@ export const generatePath = inngest.createFunction(
   {
     id: 'generate-path',
     retries: 2,
-    concurrency: [{ key: 'event.data.userId', limit: 1 }, { limit: 10 }],
+    concurrency: { limit: PLAN_CONCURRENCY },
     triggers: [{ event: EVENTS.generatePath }],
     onFailure: async ({ event, error }) => {
       const p = event.data.event.data as PathEventData
@@ -171,7 +183,7 @@ export const generateLesson = inngest.createFunction(
   {
     id: 'generate-lesson',
     retries: 2,
-    concurrency: [{ key: 'event.data.userId', limit: 2 }, { limit: 20 }],
+    concurrency: [{ key: 'event.data.userId', limit: 2 }, { limit: PLAN_CONCURRENCY }],
     triggers: [{ event: EVENTS.generateLesson }],
     onFailure: async ({ event }) => {
       const p = event.data.event.data as LessonEventData
