@@ -8,7 +8,7 @@ import { Platform } from 'react-native'
 import { getAccessToken } from '@/lib/supabase'
 import { API_BASE_URL } from '@/lib/constants'
 import type {
-  AvailabilityInput, CompleteResult, CreateSubjectInput, Lesson, Profile, SubjectDetail, SubjectSummary, Today,
+  AvailabilityInput, CompleteResult, CreateSubjectInput, Lesson, MediaLibrary, Profile, SubjectDetail, SubjectSummary, Today,
 } from '@/lib/types'
 
 export class ApiError extends Error {
@@ -95,6 +95,10 @@ export const api = {
     request<{ correct: boolean; correctOptionId: string }>(`/api/exercises/${exerciseId}/answer`, {
       method: 'POST', body: { optionId, sessionId: sessionId ?? null },
     }),
+  subjectMedia: (id: string) => request<MediaLibrary>(`/api/subjects/${id}/media`),
+  mediaFeedback: (lessonMediaId: string, helpful: boolean) =>
+    request<{ ok: true }>(`/api/lesson-media/${lessonMediaId}/feedback`, { method: 'POST', body: { helpful } }),
+
   report: (body: { lessonId: string; exerciseId?: string | null; reason: 'wrong_fact' | 'wrong_answer' | 'confusing' | 'other'; message?: string | null }) =>
     request<{ ok: true }>('/api/reports', { method: 'POST', body }),
 

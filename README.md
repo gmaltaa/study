@@ -11,7 +11,9 @@ App de estudos com IA: a pessoa diz o tema e quanto tempo tem, e a IA monta a tr
 ### 1. Supabase
 
 1. Crie um projeto.
-2. Rode a migration `backend/supabase/migrations/20261021000000_init.sql` (SQL editor ou `supabase db push`).
+2. Rode as migrations de `backend/supabase/migrations/`, em ordem (SQL editor ou `supabase db push`):
+   - `20261021000000_init.sql`: o schema inicial;
+   - `20261022000000_external_media.sql`: vídeos, podcasts, imagens e leituras nas aulas.
 3. Authentication:
    - **E-mail:** ligue "Confirm email". Nos templates "Confirm signup" e "Reset password", use o código `{{ .Token }}` (o app pede o código de 6 dígitos, não um link).
    - **Google:** habilite, coloque os Client IDs web e iOS (o web primeiro) e ligue "Skip nonce check".
@@ -50,6 +52,8 @@ pnpm eval
 ```
 
 No deploy da Vercel, configure as mesmas variáveis e instale a integração do Inngest.
+
+Vídeos nas aulas: crie uma chave da **YouTube Data API v3** no Google Cloud (APIs e serviços → Biblioteca → YouTube Data API v3 → Ativar; depois Credenciais → Criar chave de API, restrita a essa API) e coloque em `YOUTUBE_API_KEY`. Sem a chave, as aulas saem sem vídeo; imagens, leituras e podcasts funcionam sem chave nenhuma.
 
 ### 3. App
 

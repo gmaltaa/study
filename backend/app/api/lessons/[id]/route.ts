@@ -9,6 +9,7 @@ import { HttpError, json, notFound, withAuth } from '@/lib/http'
 import { assertDailyQuota } from '@/lib/limits'
 import { requestLessonContent } from '@/lib/lessons'
 import type { Block, StoredOption } from '@/lib/ai/schemas'
+import { lessonMedia } from '@/lib/media/view'
 
 export const GET = withAuth<{ id: string }>(async ({ supabase, userId, request, params }) => {
   // `learning_paths` e `subjects` se ligam de dois jeitos: a trilha aponta para
@@ -56,20 +57,25 @@ export const GET = withAuth<{ id: string }>(async ({ supabase, userId, request, 
       if (e instanceof HttpError && e.code === 'daily_quota') status = 'quota'
       else throw e
     }
-    return json({ ...base, status, blocks: [], summary: null, exercises: [], completed: false })
+    return json({ ...base, status, blocks: [], summary: null, media: [], exercises: [], completed: false })
   }
 
-  const [{ data: exercises, error: e2 }, { data: progress }] = await Promise.all([
+  const [{ data: exercises, error: e2 }, { data: progress }, media] = await Promise.all([
     supabase.from('exercises').select('id, position, kind, prompt, options, correct_option_id, concept').eq('lesson_id', lesson.id).order('position'),
     supabase.from('lesson_progress').select('status').eq('lesson_id', lesson.id).eq('user_id', userId).maybeSingle(),
+    lessonMedia(supabase, lesson.id),
   ])
   if (e2) throw e2
+  // Vídeo removido do YouTube depois da geração: o bloco dele sai do texto.
+  const refs = new Set(media.map((m) => m.ref).filter(Boolean))
+  const blocks = lesson.content.filter((b) => b.type !== 'media' || refs.has(b.ref))
 
   return json({
     ...base,
     status: 'ready' as const,
-    blocks: lesson.content,
+    blocks,
     summary: lesson.summary,
+    media,
     exercises: ((exercises ?? []) as {
       id: string; position: number; kind: string; prompt: string; options: StoredOption[]; correct_option_id: string; concept: string | null
     }[]).map((e) => ({

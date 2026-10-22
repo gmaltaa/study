@@ -61,6 +61,7 @@ O texto da aula (blocks):
 7. Bloco code só em temas técnicos, com o código completo e correto em "text" e a linguagem em "language".
 8. Texto puro: sem Markdown (sem **, #, \` ou links) dentro dos textos.
 9. Precisão: use só fatos bem estabelecidos. Não invente citações, números, datas ou nomes. Quando um detalhe for incerto ou discutido, diga isso ("por volta de", "historiadores divergem") em vez de afirmar.
+10. Mídias da aula: se o pedido listar mídias (um vídeo, imagens), coloque cada uma num bloco type "media", com a referência em "text" (ex.: "vid1"), no ponto em que ela ajuda. O vídeo costuma vir logo depois da abertura. Fale delas no texto ("no vídeo abaixo…", "repare no mapa…"), mas só com o que está na descrição de cada uma: não invente detalhes que você não viu. O tempo do vídeo já foi descontado do tamanho-alvo do texto.
 
 Os exercícios (exercises):
 1. Exatamente a quantidade pedida. Cada um testa um conceito-chave DESTA aula, com o conceito em "concept".
@@ -80,6 +81,18 @@ Recebe uma aula (texto e exercícios). Liste em "issues" apenas problemas de FAT
 - exercício cuja alternativa marcada como correta está errada, ou com mais de uma correta.
 
 Não comente estilo, didática, tamanho ou escolha de assunto. Se não houver problema de fato, devolva "issues" vazio. Em cada item, "quote" traz o trecho exato, "problem" diz o que está errado e "fix" diz como deveria estar.`
+
+export const MEDIA_SELECTION_SYSTEM = `Você é curador de conteúdo de um aplicativo de estudos brasileiro. Escolhe, entre resultados REAIS de busca (vídeos do YouTube, imagens e artigos da Wikipédia, episódios de podcast), o que vai dentro de UMA aula. Tudo em português do Brasil.
+
+Você vê só os dados de cada resultado (título, canal ou autor, duração, visualizações, data, descrição), não o conteúdo em si. Por isso, na dúvida, não escolha: uma aula sem vídeo é melhor que uma aula com um vídeo fraco ou fora do assunto.
+
+Escolha:
+- core_video: o vídeo principal, que ajuda a entender os objetivos DESTA aula. Precisa ser falado em português e caber na duração máxima informada. Prefira canais educativos, títulos claros e diretos, boa audiência. Evite sensacionalismo, opinião política, conteúdo de venda, "react", trechos de live, vídeos de outro assunto com nome parecido.
+- images: até 2 imagens que MOSTRAM o assunto da aula (mapa, retrato, obra, foto, esquema). Nada de ícone, bandeira, logotipo ou imagem genérica, a não ser que seja o próprio assunto. A legenda descreve o que a imagem mostra usando só a descrição dela.
+- reading: o artigo que melhor aprofunda o assunto da aula.
+- extras: até 2 vídeos ou episódios de podcast para quem quer ir além (podem ser longos). Português primeiro; em inglês só se for claramente muito bom e não houver nada equivalente em português.
+
+Use os ids exatamente como aparecem. Em "language", diga o idioma falado (pt, en...) pelo título e pela descrição. Em "reason", explique em uma frase, para o aluno, por que vale a pena ver ou ouvir.`
 
 // ─── Prompts do usuário ────────────────────────────────────────────────────
 
@@ -184,6 +197,8 @@ export function lessonContentPrompt(p: LearnerInput & {
   exerciseCount: number
   corrections: { quote: string; problem: string; fix: string }[] | null
   feedback: string | null
+  /** Vídeo principal e imagens escolhidos para a aula (blocos `media`). */
+  media: { ref: string; kind: 'video' | 'image'; title: string; description: string | null; minutes: number | null }[]
 }): string {
   const outline = p.outline.modules
     .map((m) => `${m.title}\n${m.lessons.map((l) => {
@@ -204,11 +219,59 @@ export function lessonContentPrompt(p: LearnerInput & {
       `Quantidade de exercícios: ${p.exerciseCount}`,
     ].join('\n'),
   ]
+  if (p.media.length) {
+    parts.push(`Mídias da aula (cada uma num bloco "media"):\n${p.media.map((m) =>
+      `- ${m.ref}: ${m.kind === 'video' ? `vídeo de ${m.minutes} min` : 'imagem'} — ${m.title}${m.description ? `. ${m.description}` : ''}`,
+    ).join('\n')}`)
+  }
   if (p.corrections?.length) {
     parts.push(`Correções obrigatórias (uma revisão de fatos apontou estes erros na versão anterior):\n${p.corrections.map((c) => `- "${c.quote}": ${c.problem} Correto: ${c.fix}`).join('\n')}`)
   }
   if (p.feedback) parts.push(`A tentativa anterior foi recusada: ${p.feedback}`)
   return parts.join('\n\n')
+}
+
+export interface MediaPromptCandidate {
+  id: string
+  kind: 'video' | 'image' | 'podcast' | 'article'
+  title: string
+  author: string | null
+  minutes: number | null
+  views: number | null
+  year: string | null
+  description: string | null
+}
+
+export function mediaSelectionPrompt(p: {
+  subjectTitle: string
+  moduleTitle: string
+  lessonTitle: string
+  objectives: string[]
+  keyConcepts: string[]
+  lessonMinutes: number
+  maxCoreMinutes: number
+  candidates: MediaPromptCandidate[]
+}): string {
+  const line = (c: MediaPromptCandidate) => [
+    `[${c.id}] ${c.title}`,
+    c.author ? `por ${c.author}` : null,
+    c.minutes != null ? `${c.minutes} min` : null,
+    c.views != null ? `${c.views.toLocaleString('pt-BR')} visualizações` : null,
+    c.year,
+  ].filter(Boolean).join(' · ') + (c.description ? `\n    ${c.description.replace(/\s+/g, ' ').slice(0, 280)}` : '')
+  const group = (kind: MediaPromptCandidate['kind'], label: string) => {
+    const items = p.candidates.filter((c) => c.kind === kind)
+    return items.length ? `${label}:\n${items.map((c) => `- ${line(c)}`).join('\n')}` : `${label}: nenhum resultado`
+  }
+  return [
+    `Tema: ${p.subjectTitle}\nMódulo: ${p.moduleTitle}\nAula: ${p.lessonTitle}`,
+    `Objetivos: ${p.objectives.join('; ') || '(não informados)'}\nConceitos-chave: ${p.keyConcepts.join('; ') || '(não informados)'}`,
+    `Duração da aula: ${p.lessonMinutes} min. Duração máxima do vídeo principal: ${p.maxCoreMinutes} min.`,
+    group('video', 'Vídeos (YouTube)'),
+    group('image', 'Imagens (Wikimedia)'),
+    group('article', 'Artigos (Wikipédia)'),
+    group('podcast', 'Episódios de podcast'),
+  ].join('\n\n')
 }
 
 export function accuracyReviewPrompt(title: string, lessonTitle: string, text: string, exercises: string): string {

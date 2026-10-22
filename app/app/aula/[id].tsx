@@ -15,6 +15,7 @@ import { TextField } from '@/components/Field'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Confetti } from '@/components/Confetti'
 import { LessonBlocks } from '@/components/LessonBlocks'
+import { MediaBlock, MediaExtras } from '@/components/media/MediaBlock'
 import { ExerciseCard } from '@/components/ExerciseCard'
 import { ProgressBar } from '@/components/ProgressBar'
 import { ErrorView, LoadingView } from '@/components/StateView'
@@ -91,6 +92,13 @@ function Player({ lesson, sessionId }: { lesson: Lesson; sessionId: string | nul
   const [reportOpen, setReportOpen] = useState(false)
   const exercises = lesson.exercises
   const exercise = exercises[index]
+  // Vídeo principal e imagens aparecem no meio do texto (blocos `media`); o
+  // resto vai para o "Para ir além".
+  // `?? []`: aula aberta contra um backend anterior a esta versão.
+  const media = lesson.media ?? []
+  const mediaByRef = new Map(media.filter((m) => m.ref).map((m) => [m.ref!, m]))
+  const extras = media.filter((m) => m.role === 'extra')
+  const video = media.find((m) => m.role === 'core')
 
   useEffect(() => { track('lesson_started', { minutes: lesson.minutes, review: lesson.completed }) }, [lesson.id])
   useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }) }, [phase, index])
@@ -170,10 +178,19 @@ function Player({ lesson, sessionId }: { lesson: Lesson; sessionId: string | nul
           <>
             <Text style={s.module}>Módulo {lesson.module.position} · {lesson.module.title}</Text>
             <Text style={s.title}>{lesson.title}</Text>
-            <Text style={s.meta}>{lesson.minutes} min · {exercises.length} exercícios</Text>
+            <Text style={s.meta}>
+              {lesson.minutes} min{video ? `, com vídeo de ${video.countsMinutes} min` : ''} · {exercises.length} exercícios
+            </Text>
             <View style={{ height: 20 }} />
-            <LessonBlocks blocks={lesson.blocks} />
+            <LessonBlocks
+              blocks={lesson.blocks}
+              renderMedia={(ref) => {
+                const item = mediaByRef.get(ref)
+                return item ? <MediaBlock item={item} /> : null
+              }}
+            />
             {lesson.disclaimer ? <Text style={s.disclaimer}>{lesson.disclaimer}</Text> : null}
+            <MediaExtras items={extras} />
             <TouchableOpacity style={s.report} onPress={() => setReportOpen(true)}>
               <Flag size={16} color={c.gray500} weight="bold" />
               <Text style={s.reportText}>Encontrou um erro? Avise a gente</Text>

@@ -103,16 +103,26 @@ export function exerciseCountFor(minutes: number): number {
   return Math.min(6, Math.max(2, Math.round(minutes / 4)))
 }
 
-/** Palavras de leitura que cabem na aula, descontado ~1 min por exercício. */
-export function wordTargetFor(minutes: number): number {
-  return Math.max(250, (minutes - exerciseCountFor(minutes)) * READING_WPM)
+/**
+ * Palavras de leitura que cabem na aula, descontados ~1 min por exercício e os
+ * minutos do vídeo principal (que conta no tempo da aula).
+ */
+export function wordTargetFor(minutes: number, mediaMinutes = 0): number {
+  return Math.max(150, (minutes - mediaMinutes - exerciseCountFor(minutes)) * READING_WPM)
 }
 
-function toBlock(b: LessonContent['blocks'][number]): Block | null {
+function toBlock(b: LessonContent['blocks'][number], mediaRefs: Set<string>): Block | null {
   const text = (b.text ?? '').trim()
   const title = clean(b.title) || null
   const items = cleanList(b.items, 12)
   switch (b.type) {
+    // Só referências de mídia que existem nesta aula, cada uma uma vez.
+    case 'media': {
+      const ref = clean(b.text)
+      if (!mediaRefs.has(ref)) return null
+      mediaRefs.delete(ref)
+      return { type: 'media', ref }
+    }
     case 'heading': return clean(text) ? { type: 'heading', text: clean(text) } : null
     case 'paragraph': return text ? { type: 'paragraph', text } : null
     case 'quote': return text ? { type: 'quote', text } : null
@@ -173,10 +183,22 @@ export interface NormalizedContent {
   exercises: StoredExercise[]
 }
 
-export function normalizeContent(raw: LessonContent, random: () => number = Math.random): NormalizedContent {
-  const blocks = raw.blocks.map(toBlock).filter((b): b is Block => b !== null)
-  if (blocks.filter((b) => b.type !== 'heading').length < 2) {
+export function normalizeContent(
+  raw: LessonContent,
+  random: () => number = Math.random,
+  /** Referências das mídias da aula (vídeo principal e imagens), na ordem. */
+  mediaRefs: string[] = [],
+): NormalizedContent {
+  const pending = new Set(mediaRefs)
+  const blocks = raw.blocks.map((b) => toBlock(b, pending)).filter((b): b is Block => b !== null)
+  if (blocks.filter((b) => b.type !== 'heading' && b.type !== 'media').length < 2) {
     throw new OutputError('A aula veio com menos de dois blocos de conteúdo.')
+  }
+  // Mídia escolhida que o modelo não posicionou entra depois da abertura: o
+  // vídeo e as imagens foram escolhidos para esta aula e precisam aparecer.
+  if (pending.size) {
+    const opening = blocks.findIndex((b) => b.type !== 'heading')
+    blocks.splice(opening + 1, 0, ...[...pending].map((ref): Block => ({ type: 'media', ref })))
   }
   const exercises = raw.exercises
     .map((e) => toExercise(e, random))

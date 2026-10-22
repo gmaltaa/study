@@ -112,6 +112,45 @@ export type Block =
   | { type: 'example'; title: string | null; text: string }
   | { type: 'callout'; title: string | null; text: string }
   | { type: 'code'; language: string | null; text: string }
+  /** Vídeo principal ou imagem da aula; `ref` aponta para `Lesson.media`. */
+  | { type: 'media'; ref: string }
+
+/** Conteúdo externo: vídeo do YouTube, episódio de podcast, imagem ou artigo. */
+export interface MediaItem {
+  id: string
+  ref: string | null
+  /** core: vídeo principal (conta no tempo); inline: imagem no texto; extra: "Para ir além". */
+  role: 'core' | 'inline' | 'extra'
+  kind: 'video' | 'image' | 'podcast' | 'article'
+  provider: 'youtube' | 'wikipedia' | 'itunes'
+  title: string
+  author: string | null
+  /** Página para abrir fora do app. */
+  url: string
+  /** Vídeo: id do YouTube. Podcast: endereço do áudio. Imagem: endereço da imagem. */
+  mediaUrl: string | null
+  thumbnailUrl: string | null
+  durationSec: number | null
+  width: number | null
+  height: number | null
+  language: string | null
+  license: string | null
+  attribution: string | null
+  description: string | null
+  caption: string | null
+  reason: string | null
+  countsMinutes: number
+  feedback: 'helpful' | 'not_helpful' | null
+}
+
+export interface MediaLibrary {
+  modules: {
+    id: string
+    position: number
+    title: string
+    items: (MediaItem & { lesson: { id: string; title: string; position: number } })[]
+  }[]
+}
 
 export interface ExerciseOption {
   id: string
@@ -140,6 +179,7 @@ export interface Lesson {
   status: 'ready' | 'generating' | 'quota'
   blocks: Block[]
   summary: string | null
+  media: MediaItem[]
   exercises: Exercise[]
   completed: boolean
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  exerciseCountFor, fitLessons, fitModules, normalizeContent, OutputError, scaleToFit,
+  exerciseCountFor, fitLessons, fitModules, normalizeContent, OutputError, scaleToFit, wordTargetFor,
 } from '@/lib/ai/validate'
 import type { LessonContent } from '@/lib/ai/schemas'
 
@@ -106,6 +106,26 @@ describe('normalizeContent', () => {
     const tf = normalizeContent(base).exercises[1]
     expect(tf.options.map((o) => o.text)).toEqual(['Verdadeiro', 'Falso'])
     expect(tf.correct_option_id).toBe('b')
+  })
+
+  it('mídia: refs desconhecidas e repetidas saem, e a que faltou entra depois da abertura', () => {
+    const withMedia: LessonContent = {
+      ...base,
+      blocks: [
+        { type: 'heading', title: null, text: 'Introdução', items: null, language: null },
+        { type: 'paragraph', title: null, text: 'Abertura.', items: null, language: null },
+        { type: 'paragraph', title: null, text: 'Mais texto.', items: null, language: null },
+        { type: 'media', title: null, text: 'img1', items: null, language: null },
+        { type: 'media', title: null, text: 'img1', items: null, language: null },
+        { type: 'media', title: null, text: 'vid9', items: null, language: null },
+      ],
+    }
+    const out = normalizeContent(withMedia, () => 0.5, ['vid1', 'img1'])
+    expect(out.blocks.map((b) => (b.type === 'media' ? b.ref : b.type))).toEqual(['heading', 'paragraph', 'vid1', 'paragraph', 'img1'])
+  })
+
+  it('o vídeo principal desconta do tamanho do texto', () => {
+    expect(wordTargetFor(20, 6)).toBeLessThan(wordTargetFor(20))
   })
 
   it('recusa aula sem exercício válido', () => {

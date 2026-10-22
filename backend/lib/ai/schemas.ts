@@ -40,13 +40,13 @@ export const moduleLessonsSchema = z.object({
 })
 export type ModuleLessons = z.infer<typeof moduleLessonsSchema>
 
-export const BLOCK_TYPES = ['heading', 'paragraph', 'list', 'example', 'callout', 'key_points', 'code', 'quote'] as const
+export const BLOCK_TYPES = ['heading', 'paragraph', 'list', 'example', 'callout', 'key_points', 'code', 'quote', 'media'] as const
 
 export const lessonContentSchema = z.object({
   blocks: z.array(z.object({
     type: z.enum(BLOCK_TYPES),
     title: z.string().nullable().describe('título do bloco (example, callout, key_points); null nos outros'),
-    text: z.string().nullable().describe('texto do bloco; null em list e key_points'),
+    text: z.string().nullable().describe('texto do bloco; em media, a referência da mídia (ex.: "vid1", "img1"); null em list e key_points'),
     items: z.array(z.string()).nullable().describe('itens de list e key_points; null nos outros'),
     language: z.string().nullable().describe('linguagem do bloco code; null nos outros'),
   })),
@@ -73,6 +73,26 @@ export const accuracyReviewSchema = z.object({
 })
 export type AccuracyReview = z.infer<typeof accuracyReviewSchema>
 
+export const mediaSelectionSchema = z.object({
+  core_video: z.object({
+    id: z.string(),
+    language: z.string().describe('idioma falado no vídeo: pt, en ou outro código de 2 letras'),
+    reason: z.string().describe('por que este vídeo ajuda nesta aula, em uma frase'),
+  }).nullable().describe('vídeo principal da aula; null se nenhum servir'),
+  images: z.array(z.object({
+    id: z.string(),
+    caption: z.string().describe('legenda curta: o que a imagem mostra, só com o que está na descrição dela'),
+    reason: z.string(),
+  })).describe('até 2 imagens; vazio se nenhuma mostrar claramente o assunto'),
+  reading: z.object({ id: z.string(), reason: z.string() }).nullable().describe('artigo para aprofundar; null se nenhum servir'),
+  extras: z.array(z.object({
+    id: z.string(),
+    language: z.string(),
+    reason: z.string(),
+  })).describe('até 2 vídeos ou podcasts para ir além; vazio se nenhum servir'),
+})
+export type MediaSelection = z.infer<typeof mediaSelectionSchema>
+
 // ─── Formato gravado no banco e entregue ao app ────────────────────────────
 
 export type Block =
@@ -84,6 +104,8 @@ export type Block =
   | { type: 'example'; title: string | null; text: string }
   | { type: 'callout'; title: string | null; text: string }
   | { type: 'code'; language: string | null; text: string }
+  /** Mídia externa escolhida para a aula (vídeo principal ou imagem). Ver lesson_media.ref. */
+  | { type: 'media'; ref: string }
 
 export interface StoredOption {
   id: string

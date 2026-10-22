@@ -1,5 +1,6 @@
 // components/LessonBlocks.tsx — desenha o conteúdo da aula, bloco a bloco.
 // O formato dos blocos é o que o backend grava (lib/ai/schemas.ts → Block).
+import type { ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
 import { Lightbulb, Warning, Star } from 'phosphor-react-native'
 import { Text } from '@/components/Text'
@@ -7,13 +8,21 @@ import { FONTS } from '@/lib/constants'
 import { makeThemedStyles, useColors } from '@/lib/theme'
 import type { Block } from '@/lib/types'
 
-export function LessonBlocks({ blocks }: { blocks: Block[] }) {
+export function LessonBlocks({ blocks, renderMedia }: {
+  blocks: Block[]
+  /** Desenha o vídeo ou a imagem de um bloco `media` (ver Lesson.media). */
+  renderMedia?: (ref: string) => ReactNode
+}) {
   const s = useStyles()
   const c = useColors()
   return (
     <View style={s.wrap}>
       {blocks.map((b, i) => {
         switch (b.type) {
+          case 'media': {
+            const node = renderMedia?.(b.ref)
+            return node ? <View key={i} style={s.media}>{node}</View> : null
+          }
           case 'heading':
             return <Text key={i} style={s.heading}>{b.text}</Text>
           case 'paragraph':
@@ -82,6 +91,7 @@ export function LessonBlocks({ blocks }: { blocks: Block[] }) {
 
 const useStyles = makeThemedStyles((c) => ({
   wrap: { gap: 14 },
+  media: { marginVertical: 6 },
   heading: { fontFamily: FONTS.extraBold, fontSize: 20, color: c.gray900, marginTop: 10, lineHeight: 26 },
   paragraph: { fontFamily: FONTS.regular, fontSize: 17, color: c.gray700, lineHeight: 27 },
   quote: { borderLeftWidth: 3, borderLeftColor: c.primary, paddingLeft: 14, paddingVertical: 2 },

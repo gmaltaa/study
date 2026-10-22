@@ -17,7 +17,9 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "pt-BR",
-        "CFBundleLocalizations": ["pt-BR"]
+        "CFBundleLocalizations": [
+          "pt-BR"
+        ]
       }
     },
     "android": {
@@ -64,7 +66,10 @@
           },
           "ios": {
             "extraPods": [
-              { "name": "GoogleUtilities", "modular_headers": true }
+              {
+                "name": "GoogleUtilities",
+                "modular_headers": true
+              }
             ]
           }
         }
@@ -77,13 +82,25 @@
           "color": "#0F766E",
           "defaultChannel": "default"
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "e567d98b-221b-4718-bec7-9bd20517d800"
+      }
+    },
+    "owner": "gmaltta"
   }
 }

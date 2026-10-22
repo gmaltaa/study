@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Alert, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Archive, CalendarBlank, Clock, Pause, PencilSimple, Play, Trash, Warning } from 'phosphor-react-native'
+import { Archive, CalendarBlank, CaretRightIcon, Clock, FilmStripIcon, Pause, PencilSimple, Play, Trash, Warning } from 'phosphor-react-native'
 import { Text } from '@/components/Text'
 import { Screen } from '@/components/Screen'
 import { Card } from '@/components/Card'
@@ -333,6 +333,15 @@ function Detail({ subject, refreshing, onRefresh }: { subject: SubjectDetail; re
         </>
       ) : null}
 
+      <Card style={[s.libraryCard, { marginTop: 28 }]} onPress={() => router.push({ pathname: '/tema/[id]/biblioteca', params: { id: subject.id } })}>
+        <FilmStripIcon size={24} color={c.primary} weight="bold" />
+        <View style={{ flex: 1 }}>
+          <Text style={s.availText}>Biblioteca do tema</Text>
+          <Text style={s.availMeta}>Vídeos, podcasts, imagens e leituras das aulas</Text>
+        </View>
+        <CaretRightIcon size={18} color={c.gray500} weight="bold" />
+      </Card>
+
       <Text style={s.section}>Trilha</Text>
       <ModuleList
         modules={subject.path?.modules ?? []}
@@ -450,6 +459,7 @@ const useStyles = makeThemedStyles((c) => ({
   upcomingMin: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500 },
 
   availRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  libraryCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   availText: { fontFamily: FONTS.semiBold, fontSize: 15, color: c.gray900 },
   availMeta: { fontFamily: FONTS.regular, fontSize: 13, color: c.gray500, marginTop: 2 },
 

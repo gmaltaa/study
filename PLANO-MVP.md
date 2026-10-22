@@ -128,6 +128,25 @@ Cada etapa grava `model` e `prompt_version` no que gera. As versões ficam em `b
 
 ---
 
+## 5b. Conteúdo externo nas aulas
+
+Cada aula traz conteúdo real de fora, ligado ao assunto dela. Nada é copiado: o vídeo toca no player do YouTube, o podcast toca do endereço do próprio programa, a imagem aparece com o crédito da licença.
+
+| Tipo | Fonte | Papel |
+|---|---|---|
+| Vídeo principal | YouTube (Data API v3) | No meio do texto; **conta no tempo da aula** (até metade dela) e o texto encolhe para caber |
+| Imagens | Wikipédia / Wikimedia Commons, só licenças livres | No meio do texto, com legenda e crédito |
+| Leitura | Artigo da Wikipédia | "Para ir além" |
+| Vídeo extra e podcast | YouTube e busca de podcasts da Apple | "Para ir além": opcional, fora do tempo da aula; em inglês só se não houver equivalente em português, e marcado |
+
+Como é escolhido (`backend/lib/media/`), antes de o texto da aula ser gerado:
+1. Busca nas fontes com termos tirados da própria aula (título, conceito-chave, tema). Sem IA.
+2. Cache compartilhado das buscas (`media_searches`): quem estuda o mesmo assunto depois reaproveita. É o que faz a cota do YouTube (10.000 unidades por dia, 100 por busca) render; o teto diário fica em `YOUTUBE_DAILY_UNITS` e, esgotado, a aula sai sem vídeo.
+3. A IA rápida escolhe entre os resultados reais, ou recusa tudo (6ª chamada de IA, `media_selection`). O código confere: id existe, tipo certo, vídeo principal em português e dentro do tempo, licença livre, nada repetido.
+4. O texto da aula é gerado sabendo das mídias: posiciona cada uma (blocos `media`) e fala delas.
+
+No app: vídeo com miniatura que abre o player do YouTube (página `/embed/youtube/:id` do backend), player de podcast, imagem com crédito, "Para ir além" no fim da aula, "Ajudou?" em cada conteúdo e a **Biblioteca do tema**, com tudo por módulo. Um job diário (`refresh-media`) reconfere os vídeos guardados e esconde o que saiu do ar.
+
 ## 6. Próximos passos
 
 1. Criar os projetos (Supabase, Vercel, Inngest, EAS, Google Cloud, Apple) e preencher os `.env` (README).

@@ -2,10 +2,12 @@
 //
 //  - generatePath: estrutura da trilha (módulos, depois as aulas de cada módulo
 //    em paralelo). Leva de 30 s a 2 min, por isso não roda na requisição.
-//  - generateLesson: conteúdo e exercícios de uma aula, com revisão de precisão
-//    nos temas factuais.
+//  - generateLesson: conteúdo externo da aula (vídeo, imagens, leitura,
+//    podcast), depois o texto e os exercícios, com revisão de precisão nos
+//    temas factuais.
 //  - pregenerateLessons: deixa prontas as aulas dos próximos 2 dias de estudo.
 //  - sendReminders: lembrete no horário escolhido, se a sessão do dia não foi feita.
+//  - refreshMedia: reconfere os vídeos do YouTube guardados (regras da API).
 //
 // Cada `step.run` é um passo com retry próprio: se o módulo 4 falhar, só ele é
 // refeito. Os passos de gravação apagam antes de inserir, então repetir um
@@ -23,6 +25,9 @@ import {
 import { dayOfWeek, partsIn } from '@/lib/dates'
 import { assertDailyQuota } from '@/lib/limits'
 import { sendPushToUsers } from '@/lib/push'
+import { candidateToRow, planLessonMedia } from '@/lib/media/resolve'
+import { refreshVideos } from '@/lib/media/youtube'
+import { EMPTY_PLAN, type LessonMediaPlan } from '@/lib/media/types'
 
 /**
  * Teto de execuções simultâneas por função. O plano grátis do Inngest aceita
@@ -164,8 +169,24 @@ export const generatePath = inngest.createFunction(
 
 // ─── Aula ──────────────────────────────────────────────────────────────────
 
-async function saveLessonContent(p: LessonEventData, content: NormalizedContent, reviewed: boolean) {
+async function saveLessonContent(p: LessonEventData, content: NormalizedContent, reviewed: boolean, media: LessonMediaPlan) {
   const db = adminClient()
+  // Mídia primeiro: os blocos `media` da aula apontam para estas referências.
+  await db.from('lesson_media').delete().eq('lesson_id', p.lessonId)
+  const picks = media.picks.filter((m) => m.candidate.id)
+  if (picks.length) {
+    const { error } = await db.from('lesson_media').insert(picks.map((m, i) => ({
+      lesson_id: p.lessonId, user_id: p.userId, media_item_id: m.candidate.id, role: m.role, position: i + 1,
+      ref: m.ref, caption: m.caption, reason: m.reason, counts_minutes: m.countsMinutes,
+    })))
+    if (error) throw error
+    // O idioma decidido na seleção vale para quem usar o mesmo conteúdo depois.
+    for (const m of picks) {
+      if (m.language && !m.candidate.language) {
+        await db.from('media_items').update({ language: m.language }).eq('id', m.candidate.id)
+      }
+    }
+  }
   await db.from('exercises').delete().eq('lesson_id', p.lessonId)
   const { error } = await db.from('exercises').insert(content.exercises.map((e) => ({
     lesson_id: p.lessonId, user_id: p.userId, position: e.position, kind: e.kind,
@@ -196,18 +217,29 @@ export const generateLesson = inngest.createFunction(
     if (!loaded || loaded.contentStatus === 'ready') return { skipped: true }
     const meta = { userId: p.userId, subjectId: loaded.subject.id }
 
-    let content = (await step.run('content', () => generateLessonContent(meta, loaded.input))) as NormalizedContent
+    // Antes do texto: o vídeo principal desconta do tamanho do texto, e o texto
+    // fala das imagens. Falha aqui não derruba a aula, só a deixa sem mídia.
+    const media = (await step.run('media', async () => {
+      try {
+        return await planLessonMedia({ ...meta, lessonId: p.lessonId }, loaded.input, loaded.subject.title)
+      } catch (e) {
+        console.error('[media] aula sem mídia', e)
+        return EMPTY_PLAN
+      }
+    })) as LessonMediaPlan
+
+    let content = (await step.run('content', () => generateLessonContent(meta, loaded.input, null, media))) as NormalizedContent
     let reviewed = false
     if (loaded.subject.topic_profile?.accuracy_sensitivity === 'high') {
       const issues = await step.run('review', () =>
         reviewAccuracy({ ...meta, lessonId: p.lessonId }, loaded.subject.title, loaded.input.lesson.title, content))
       reviewed = true
       if (issues.length) {
-        content = (await step.run('fix', () => generateLessonContent(meta, loaded.input, issues))) as NormalizedContent
+        content = (await step.run('fix', () => generateLessonContent(meta, loaded.input, issues, media))) as NormalizedContent
       }
     }
-    await step.run('save', () => saveLessonContent(p, content, reviewed))
-    return { exercises: content.exercises.length, reviewed }
+    await step.run('save', () => saveLessonContent(p, content, reviewed, media))
+    return { exercises: content.exercises.length, reviewed, media: media.picks.length }
   },
 )
 
@@ -352,4 +384,40 @@ export const sendReminders = inngest.createFunction(
   }),
 )
 
-export const functions = [generatePath, generateLesson, pregenerateLessons, sendReminders]
+// ─── Conteúdo externo ──────────────────────────────────────────────────────
+
+/** Reconferir vídeos com mais que isso. Fica abaixo dos 30 dias das regras da API. */
+const MEDIA_RECHECK_DAYS = 20
+
+/**
+ * Uma vez por dia: atualiza os vídeos do YouTube guardados há mais tempo e
+ * marca como indisponível o que saiu do ar (o app deixa de mostrar). As buscas
+ * antigas no cache também saem, para não servir dado velho.
+ */
+export const refreshMedia = inngest.createFunction(
+  { id: 'refresh-media', triggers: [{ cron: '30 4 * * *' }] },
+  async ({ step }) => step.run('refresh', async () => {
+    const db = adminClient()
+    const before = new Date(Date.now() - MEDIA_RECHECK_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    await db.from('media_searches').delete().eq('provider', 'youtube').lt('fetched_at', before)
+    const { data } = await db
+      .from('media_items')
+      .select('external_id')
+      .eq('provider', 'youtube')
+      .eq('status', 'active')
+      .lt('checked_at', before)
+      .limit(500)
+    const ids = ((data ?? []) as { external_id: string }[]).map((r) => r.external_id)
+    const { updated, gone } = await refreshVideos(ids)
+    if (updated.length) {
+      await db.from('media_items').upsert(updated.map(candidateToRow), { onConflict: 'provider,external_id' })
+    }
+    if (gone.length) {
+      await db.from('media_items').update({ status: 'unavailable', checked_at: new Date().toISOString() })
+        .eq('provider', 'youtube').in('external_id', gone)
+    }
+    return { checked: ids.length, updated: updated.length, gone: gone.length }
+  }),
+)
+
+export const functions = [generatePath, generateLesson, pregenerateLessons, sendReminders, refreshMedia]

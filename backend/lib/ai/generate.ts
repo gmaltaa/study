@@ -9,18 +9,20 @@ import type { z } from 'zod'
 import { adminClient } from '@/lib/supabase'
 import { MODELS, PROMPT_VERSION } from '@/lib/ai/models'
 import {
-  accuracyReviewSchema, lessonContentSchema, moduleLessonsSchema, pathModulesSchema, topicProfileSchema,
+  accuracyReviewSchema, lessonContentSchema, mediaSelectionSchema, moduleLessonsSchema, pathModulesSchema, topicProfileSchema,
   type AccuracyReview, type TopicProfile,
 } from '@/lib/ai/schemas'
 import {
-  ACCURACY_REVIEW_SYSTEM, LESSON_CONTENT_SYSTEM, MODULE_LESSONS_SYSTEM, PATH_MODULES_SYSTEM, TOPIC_PROFILE_SYSTEM,
-  accuracyReviewPrompt, lessonContentPrompt, moduleLessonsPrompt, pathModulesPrompt, topicProfilePrompt,
+  ACCURACY_REVIEW_SYSTEM, LESSON_CONTENT_SYSTEM, MEDIA_SELECTION_SYSTEM, MODULE_LESSONS_SYSTEM, PATH_MODULES_SYSTEM, TOPIC_PROFILE_SYSTEM,
+  accuracyReviewPrompt, lessonContentPrompt, mediaSelectionPrompt, moduleLessonsPrompt, pathModulesPrompt, topicProfilePrompt,
   type LearnerInput, type LessonOutline,
 } from '@/lib/ai/prompts'
 import {
   exerciseCountFor, fitLessons, fitModules, normalizeContent, OutputError, wordTargetFor,
   type FittedLesson, type FittedModule, type NormalizedContent,
 } from '@/lib/ai/validate'
+import { labelCandidates, toPromptCandidates, validateSelection } from '@/lib/media/select'
+import { EMPTY_PLAN, type LessonMediaPlan, type MediaCandidate } from '@/lib/media/types'
 
 type JobKind = keyof typeof PROMPT_VERSION
 
@@ -171,23 +173,66 @@ export function generateLessonContent(
   meta: { userId: string; subjectId: string },
   input: LessonInput,
   corrections: AccuracyReview['issues'] | null = null,
+  media: LessonMediaPlan = EMPTY_PLAN,
 ): Promise<NormalizedContent> {
+  // Vídeo principal e imagens entram no texto como blocos `media`; os extras
+  // ficam no "Para ir além", fora do texto.
+  const placed = media.picks.filter((p) => p.ref)
   return withFeedback(async (feedback) => {
     const raw = await call({ kind: 'lesson_content', userId: meta.userId, subjectId: meta.subjectId, refId: input.lesson.id }, {
       model: MODELS.lesson,
       system: LESSON_CONTENT_SYSTEM,
       prompt: lessonContentPrompt({
         ...input,
-        wordTarget: wordTargetFor(input.lesson.minutes),
+        wordTarget: wordTargetFor(input.lesson.minutes, media.coreMinutes),
         exerciseCount: exerciseCountFor(input.lesson.minutes),
         corrections,
         feedback,
+        media: placed.map((p) => ({
+          ref: p.ref!,
+          kind: p.candidate.kind === 'video' ? 'video' : 'image',
+          title: p.candidate.kind === 'image' ? p.caption ?? p.candidate.title : p.candidate.title,
+          description: p.candidate.kind === 'image' ? p.candidate.description : p.reason,
+          minutes: p.countsMinutes || null,
+        })),
       }),
       schema: lessonContentSchema,
       temperature: 0.5,
     })
-    return normalizeContent(raw)
+    return normalizeContent(raw, Math.random, placed.map((p) => p.ref!))
   })
+}
+
+// ─── Etapa 5a: conteúdo externo da aula ────────────────────────────────────
+
+/** Escolhe, entre resultados reais de busca, o que entra na aula. */
+export async function selectLessonMedia(
+  meta: { userId: string; subjectId: string; lessonId: string },
+  context: {
+    subjectTitle: string
+    moduleTitle: string
+    lessonTitle: string
+    objectives: string[]
+    keyConcepts: string[]
+    lessonMinutes: number
+    maxCoreSec: number
+  },
+  candidates: MediaCandidate[],
+): Promise<LessonMediaPlan> {
+  if (candidates.length === 0) return EMPTY_PLAN
+  const labeled = labelCandidates(candidates)
+  const raw = await call({ kind: 'media_selection', userId: meta.userId, subjectId: meta.subjectId, refId: meta.lessonId }, {
+    model: MODELS.fast,
+    system: MEDIA_SELECTION_SYSTEM,
+    prompt: mediaSelectionPrompt({
+      ...context,
+      maxCoreMinutes: Math.floor(context.maxCoreSec / 60),
+      candidates: toPromptCandidates(labeled),
+    }),
+    schema: mediaSelectionSchema,
+    temperature: 0,
+  })
+  return validateSelection(raw, labeled, context.maxCoreSec)
 }
 
 // ─── Etapa 7: revisão de precisão ──────────────────────────────────────────
@@ -198,9 +243,10 @@ function contentAsText(content: NormalizedContent): { text: string; exercises: s
       case 'list': return b.items.map((i) => `- ${i}`).join('\n')
       case 'key_points': return `${b.title ?? 'Pontos principais'}:\n${b.items.map((i) => `- ${i}`).join('\n')}`
       case 'example': case 'callout': return `${b.title ? `${b.title}: ` : ''}${b.text}`
+      case 'media': return ''
       default: return b.text
     }
-  }).join('\n\n')
+  }).filter(Boolean).join('\n\n')
   const exercises = content.exercises.map((e) => {
     const opts = e.options.map((o) => `   ${o.id}) ${o.text}${o.id === e.correct_option_id ? '  [marcada como correta]' : ''}`).join('\n')
     return `${e.position}. ${e.prompt}\n${opts}`

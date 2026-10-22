@@ -47,6 +47,15 @@ export function formatMinutes(min: number): string {
   return m ? `${h} h ${m} min` : `${h} h`
 }
 
+/** Duração de vídeo ou áudio: "6:05", "1:02:03". */
+export function formatDuration(totalSec: number): string {
+  const sec = Math.max(0, Math.floor(totalSec))
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = String(sec % 60).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
+}
+
 /** "~24 h" para totais grandes. */
 export function formatHours(min: number): string {
   if (min < 90) return formatMinutes(min)

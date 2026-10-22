@@ -21,6 +21,7 @@ export const PROMPT_VERSION = {
   topic_profile: 'tp-1',
   path_modules: 'pm-1',
   module_lessons: 'ml-1',
-  lesson_content: 'lc-1',
+  lesson_content: 'lc-2',
   accuracy_review: 'ar-1',
+  media_selection: 'ms-1',
 } as const

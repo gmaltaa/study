@@ -22,6 +22,7 @@ export const keys = {
   subjects: ['subjects'] as const,
   subject: (id: string) => ['subject', id] as const,
   lesson: (id: string) => ['lesson', id] as const,
+  subjectMedia: (id: string) => ['subject-media', id] as const,
 }
 
 /** Depois de qualquer ação de estudo: hoje, a lista e o tema mudam juntos. */
