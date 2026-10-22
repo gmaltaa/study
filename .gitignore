@@ -1,0 +1,33 @@
+# Dependências
+node_modules/
+
+# Segredos: ficam na Vercel e no EAS, nunca no repositório
+.env*
+!.env.example
+
+# Build e caches
+.next/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+.vercel/
+.metro-health-check*
+next-env.d.ts
+expo-env.d.ts
+
+# Pastas nativas geradas pelo prebuild
+/app/ios
+/app/android
+
+# Chaves de assinatura
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Sistema
+.DS_Store
+npm-debug.*

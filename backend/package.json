@@ -1,0 +1,31 @@
+{
+  "name": "estudos-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "eval": "vitest run --config vitest.eval.config.ts",
+    "inngest": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.88.0",
+    "ai": "^6.0.86",
+    "inngest": "^4.0.0",
+    "jose": "6.2.2",
+    "next": "16.2.0",
+    "react": "^19",
+    "react-dom": "^19",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
